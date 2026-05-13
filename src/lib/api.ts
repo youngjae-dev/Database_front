@@ -10,6 +10,7 @@ const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.repl
 const API_PREFIX =
   (import.meta.env.VITE_API_PREFIX as string | undefined)?.replace(/\/$/, '') ||
   '/api'
+const TOKEN_KEY = 'token'
 
 export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
@@ -21,6 +22,13 @@ export async function apiFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const headers = new Headers(init?.headers)
+  const token =
+    typeof localStorage === 'undefined' ? null : localStorage.getItem(TOKEN_KEY)
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
   if (
     init?.body &&
     typeof init.body === 'string' &&

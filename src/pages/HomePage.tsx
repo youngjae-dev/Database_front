@@ -1,5 +1,6 @@
-﻿import type { ReactNode } from 'react'
+﻿import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { apiFetch } from '../lib/api'
 
 const imgHome = "https://www.figma.com/api/mcp/asset/b5391729-c3e1-417a-a937-c3b79a5938ea";
 const img = "https://www.figma.com/api/mcp/asset/e9adff4f-ceab-4440-ab8f-631ba7e95021";
@@ -21,7 +22,260 @@ type HomePageProps = {
   children?: ReactNode | null;
 };
 
+type HomeUser = {
+  username: string
+  department: string
+}
+
+type HomeDashboard = {
+  user: HomeUser
+  caseCount: number | null
+  evidenceCount: number | null
+  inProgressHandoverCount: number | null
+  recentRegisteredCount: number | null
+  recentCases: RecentListItem[]
+  recentEvidences: RecentListItem[]
+}
+
+type RecentListItem = {
+  id: string
+  name: string
+}
+
+const DEFAULT_DASHBOARD: HomeDashboard = {
+  user: {
+    username: '',
+    department: '',
+  },
+  caseCount: null,
+  evidenceCount: null,
+  inProgressHandoverCount: null,
+  recentRegisteredCount: null,
+  recentCases: [],
+  recentEvidences: [],
+}
+
+const DEPARTMENT_LABELS: Record<string, string> = {
+  INVESTIGATOR: '수사관',
+  CUSTODIAN: '증거물 보관 담당자',
+  ANALYST: '분석관',
+  ADMIN: '시스템 관리자',
+  LEGAL: '법무 담당자',
+}
+
+async function readJsonOrText(res: Response): Promise<unknown> {
+  const raw = await res.text()
+  if (!raw) return null
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+async function fetchApiBody(path: string): Promise<unknown> {
+  const res = await apiFetch(path)
+  if (!res.ok) throw new Error(`${path} 요청에 실패했습니다.`)
+  return readJsonOrText(res)
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function parseUser(value: unknown): HomeUser {
+  const data = asRecord(value)
+  const nested = asRecord(data?.data) ?? data
+  return {
+    username: typeof nested?.username === 'string' ? nested.username : '',
+    department: typeof nested?.department === 'string' ? nested.department : '',
+  }
+}
+
+function parseCount(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/,/g, '').trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const data = asRecord(value)
+  if (!data) return null
+  const nested = asRecord(data?.data) ?? data
+  const count = nested?.count ?? nested?.total ?? nested?.value
+  return parseCount(count)
+}
+
+function parseList(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+
+  const data = asRecord(value)
+  const candidates = [
+    data?.data,
+    data?.content,
+    data?.items,
+    data?.list,
+    data?.recentCases,
+    data?.recentEvidences,
+  ]
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate
+    const nested = asRecord(candidate)
+    if (Array.isArray(nested?.content)) return nested.content
+    if (Array.isArray(nested?.items)) return nested.items
+  }
+
+  return []
+}
+
+function getStringField(
+  data: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = data[key]
+    if (typeof value === 'string') return value
+    if (typeof value === 'number') return String(value)
+  }
+  return ''
+}
+
+function parseRecentItems(
+  value: unknown,
+  type: 'case' | 'evidence',
+): RecentListItem[] {
+  const idKeys =
+    type === 'case'
+      ? ['caseNumber', 'caseNo', 'caseId', 'id']
+      : ['evidenceNumber', 'evidenceNo', 'evidenceId', 'id']
+  const nameKeys =
+    type === 'case'
+      ? ['caseName', 'name', 'title']
+      : ['evidenceName', 'name', 'title']
+
+  return parseList(value)
+    .slice(0, 10)
+    .map((item) => {
+      const data = asRecord(item) ?? {}
+      return {
+        id: getStringField(data, idKeys) || '-',
+        name: getStringField(data, nameKeys) || '-',
+      }
+    })
+}
+
+function formatDepartment(department: string): string {
+  return DEPARTMENT_LABELS[department] ?? department
+}
+
+function formatCount(count: number | null): string {
+  return count === null ? '-' : count.toLocaleString('ko-KR')
+}
+
+function RecentTableRow({ item }: { item: RecentListItem }) {
+  return (
+    <div className="border-[#d9d9d9] border-b border-solid content-stretch flex h-[40px] items-center justify-center relative shrink-0 w-[410px]">
+      <div className="border-[#d9d9d9] border-r border-solid content-stretch flex h-[46px] items-center justify-center overflow-clip p-[10px] relative shrink-0 w-[180px]">
+        <p className="flex-[1_0_0] font-['Inter:Light','Noto_Sans_KR:Regular',sans-serif] font-light leading-[normal] min-w-px not-italic relative text-[15px] text-black text-center truncate">
+          {item.id}
+        </p>
+      </div>
+      <div className="content-stretch flex h-[46px] items-center justify-center overflow-clip relative shrink-0 w-[230px]">
+        <p className="flex-[1_0_0] font-['Inter:Light','Noto_Sans_KR:Regular',sans-serif] font-light leading-[normal] min-w-px not-italic relative text-[15px] text-black text-center truncate px-2">
+          {item.name}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function HomePage({ className, children = null }: HomePageProps) {
+  const [dashboard, setDashboard] = useState<HomeDashboard>(DEFAULT_DASHBOARD)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadDashboard() {
+      const [
+        userResult,
+        caseCountResult,
+        evidenceCountResult,
+        inProgressHandoverResult,
+        recentCasesResult,
+        recentEvidencesResult,
+      ] = await Promise.allSettled([
+        fetchApiBody('/auth/me'),
+        fetchApiBody('/case/count'),
+        fetchApiBody('/evidence/count'),
+        fetchApiBody('/handover/in-progress/count'),
+        fetchApiBody('/cases/RecentCases'),
+        fetchApiBody('/evidence/RecentEvidences'),
+      ])
+
+      if (ignore) return
+
+      const recentCases =
+        recentCasesResult.status === 'fulfilled'
+          ? parseRecentItems(recentCasesResult.value, 'case')
+          : []
+      const recentEvidences =
+        recentEvidencesResult.status === 'fulfilled'
+          ? parseRecentItems(recentEvidencesResult.value, 'evidence')
+          : []
+      const hasRecentData =
+        recentCasesResult.status === 'fulfilled' ||
+        recentEvidencesResult.status === 'fulfilled'
+
+      setDashboard({
+        user:
+          userResult.status === 'fulfilled'
+            ? parseUser(userResult.value)
+            : DEFAULT_DASHBOARD.user,
+        caseCount:
+          caseCountResult.status === 'fulfilled'
+            ? parseCount(caseCountResult.value)
+            : null,
+        evidenceCount:
+          evidenceCountResult.status === 'fulfilled'
+            ? parseCount(evidenceCountResult.value)
+            : null,
+        inProgressHandoverCount:
+          inProgressHandoverResult.status === 'fulfilled'
+            ? parseCount(inProgressHandoverResult.value)
+            : null,
+        recentRegisteredCount: hasRecentData
+          ? recentCases.length + recentEvidences.length
+          : null,
+        recentCases,
+        recentEvidences,
+      })
+    }
+
+    loadDashboard().catch(() => {
+      if (!ignore) setDashboard(DEFAULT_DASHBOARD)
+    })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const username = dashboard.user.username || '-'
+  const department = dashboard.user.department
+    ? formatDepartment(dashboard.user.department)
+    : '-'
+  const caseCount = formatCount(dashboard.caseCount)
+  const evidenceCount = formatCount(dashboard.evidenceCount)
+  const inProgressHandoverCount = formatCount(
+    dashboard.inProgressHandoverCount,
+  )
+  const recentRegisteredCount = formatCount(dashboard.recentRegisteredCount)
+
   return (
     <div className={className || "h-[1024px] relative w-[1440px]"} data-node-id="2:844" data-name="home">
       <img alt="" className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={imgHome} />
@@ -58,7 +312,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
             인수인계
           </p>
         </a>
-        <a className="absolute contents cursor-pointer left-[36px] top-[355px]" data-node-id="2:858" data-name="증거물 관리">
+        <Link to="/EvidenceList" className="absolute contents cursor-pointer left-[36px] top-[355px]" data-node-id="2:858" data-name="증거물 관리">
           <div className="absolute h-[80px] left-[36px] top-[355px] w-[276px]" data-node-id="2:859" data-name="증거물 관리">
             <img alt="" className="absolute block inset-0 max-w-none size-full" src={img5} />
           </div>
@@ -68,19 +322,21 @@ export function HomePage({ className, children = null }: HomePageProps) {
           <div className="absolute h-[43px] left-[54px] top-[372px] w-[51px]" data-node-id="2:861" data-name="증거물 관리">
             <img alt="" className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={img6} />
           </div>
-        </a>
-        <a className="absolute contents cursor-pointer left-[36px] top-[239.5px]" data-node-id="2:862" data-name="사건 관리">
-          <div className="absolute h-[80px] left-[36px] top-[239.5px] w-[276px]" data-node-id="2:863" data-name="사건 관리">
+        </Link>
+        <Link to="/CaseList" className="absolute contents cursor-pointer left-[36px] top-[239.5px]">
+          <div className="absolute h-[80px] left-[36px] top-[239.5px] w-[276px]"
+            data-node-id="2:863" data-name="사건 관리">
             <img alt="" className="absolute block inset-0 max-w-none size-full" src={img5} />
           </div>
-          <p className="absolute font-['Pretendard:Medium',sans-serif] h-[35px] leading-[normal] left-[120px] not-italic text-[30px] text-white top-[262px] w-[169px]" data-node-id="2:864">
-            사건 관리
+          <p className="absolute font-['Pretendard:Medium',sans-serif] h-[35px] leading-[normal] left-[120px]
+            not-italic text-[30px] text-white top-[262px] w-[169px]" data-node-id="2:864">
+          사건 관리
           </p>
           <div className="absolute h-[37px] left-[54px] top-[262px] w-[39px]" data-node-id="2:865" data-name="사건관리 로고">
             <img alt="" className="absolute inset-0 max-w-none object-bottom pointer-events-none size-full" src={img7} />
           </div>
-        </a>
-        <div className="absolute contents left-[36px] top-[130px]" data-node-id="2:866" data-name="홈">
+        </Link>
+        <Link to="/home" className="absolute contents cursor-pointer left-[36px] top-[130px]" data-node-id="2:866" data-name="홈">
           <div className="absolute h-[80px] left-[36px] top-[130px] w-[276px]" data-node-id="2:867" data-name="홈">
             <img alt="" className="absolute block inset-0 max-w-none size-full" src={img8} />
           </div>
@@ -90,7 +346,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
           <div className="absolute aspect-[354/401] left-[15.61%] right-[73.41%] top-[147px]" data-node-id="2:869" data-name="홈 로고">
             <img alt="" className="absolute inset-0 max-w-none object-cover pointer-events-none size-full" src={img9} />
           </div>
-        </div>
+        </Link>
         <p className="absolute font-['Pretendard:Regular',sans-serif] h-[27px] leading-[normal] left-[41px] not-italic text-[#d9d9d9] text-[15px] top-[99px] w-[172px]" data-node-id="2:870">
           NAVIGATION
         </p>
@@ -111,14 +367,16 @@ export function HomePage({ className, children = null }: HomePageProps) {
           </div>
         </div>
         <p className="absolute font-['Pretendard:ExtraLight',sans-serif] leading-[normal] left-[955px] not-italic text-[15px] text-black top-[45px] whitespace-nowrap" data-node-id="2:876">
-          수사관
+          {department}
         </p>
         <p className="absolute font-['Pretendard:Medium',sans-serif] leading-[normal] left-[868px] not-italic text-[30px] text-black top-[29px] whitespace-nowrap" data-node-id="2:877">
-          홍길동
+          {username}
         </p>
       </div>
       <div className="absolute contents inset-[12.89%_56.25%_78.22%_27.92%] leading-[normal] not-italic whitespace-nowrap" data-node-id="2:878" data-name="제목">
-        <p className="absolute font-['Pretendard:Regular',sans-serif] inset-[19.43%_56.25%_78.22%_27.92%] text-[#252525] text-[20px]" data-node-id="2:879">{`김은우 수사관님, 환영합니다. `}</p>
+        <p className="absolute font-['Pretendard:Regular',sans-serif] inset-[19.43%_56.25%_78.22%_27.92%] text-[#252525] text-[20px]" data-node-id="2:879">
+          {`${username} ${department}님, 환영합니다. `}
+        </p>
         <p className="absolute font-['Pretendard:SemiBold',sans-serif] inset-[12.89%_69.03%_81.25%_27.92%] text-[50px] text-black" data-node-id="2:880">
           홈
         </p>
@@ -132,7 +390,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
                 진행 중 인수인계
               </p>
               <p className="absolute font-['Pretendard:Medium',sans-serif] inset-[47.09%_10.9%_23.26%_36.97%] leading-[0] not-italic text-[0px] text-black" data-node-id="2:885">
-                <span className="leading-[normal] text-[30px]">{`1,248 `}</span>
+                <span className="leading-[normal] text-[30px]">{`${inProgressHandoverCount} `}</span>
                 <span className="font-['Pretendard:Regular',sans-serif] leading-[normal] text-[20px]">건</span>
               </p>
               <div className="absolute aspect-[87/89] left-[6.64%] right-[67.88%] top-[39px]" data-node-id="2:886" data-name="진행 중 인수인계 로고">
@@ -147,7 +405,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
                 최근 등록
               </p>
               <p className="absolute font-['Pretendard:Medium',sans-serif] inset-[47.09%_11.85%_23.26%_36.02%] leading-[0] not-italic text-[0px] text-black" data-node-id="2:890">
-                <span className="leading-[normal] text-[30px]">{`32 `}</span>
+                <span className="leading-[normal] text-[30px]">{`${recentRegisteredCount} `}</span>
                 <span className="font-['Pretendard:Regular',sans-serif] leading-[normal] text-[20px]">건</span>
               </p>
               <div className="absolute aspect-[53/55] left-[5.21%] right-[69.67%] top-[39px]" data-node-id="2:891" data-name="최근 등록 로고">
@@ -162,7 +420,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
                 전체 증거물
               </p>
               <p className="absolute font-['Pretendard:Medium',sans-serif] inset-[47.09%_11.37%_23.26%_36.49%] leading-[0] not-italic text-[0px] text-black" data-node-id="2:895">
-                <span className="leading-[normal] text-[30px]">{`1,248 `}</span>
+                <span className="leading-[normal] text-[30px]">{`${evidenceCount} `}</span>
                 <span className="font-['Pretendard:Regular',sans-serif] leading-[normal] text-[20px]">건</span>
               </p>
               <div className="absolute h-[55px] left-[12px] top-[39px] w-[53.69px]" data-node-id="2:896" data-name="전체 증거물 증거">
@@ -177,7 +435,7 @@ export function HomePage({ className, children = null }: HomePageProps) {
                 전체 사건
               </p>
               <p className="absolute font-['Pretendard:Medium',sans-serif] inset-[47.09%_9.95%_23.26%_37.91%] leading-[0] not-italic text-[0px] text-black" data-node-id="2:900">
-                <span className="leading-[normal] text-[30px]">{`1,248 `}</span>
+                <span className="leading-[normal] text-[30px]">{`${caseCount} `}</span>
                 <span className="font-['Pretendard:Regular',sans-serif] leading-[normal] text-[20px]">건</span>
               </p>
               <div className="absolute aspect-[135/140] left-[6.16%] right-[68.7%] top-[39px]" data-node-id="2:901" data-name="전체 사건 로고">
@@ -193,6 +451,14 @@ export function HomePage({ className, children = null }: HomePageProps) {
         <div className="absolute bg-white border border-[#d9d9d9] border-solid h-[584px] left-0 rounded-[15px] top-[6px] w-[469px]" data-node-id="2:903" />
         <div className="absolute border border-[#d9d9d9] border-solid h-[446px] left-[29px] overflow-clip rounded-[10px] top-[110px] w-[410px]" data-node-id="2:904" data-name="증거물목록 Table">
           <div className="absolute border border-[#d9d9d9] border-solid content-stretch flex flex-col h-[400px] items-start left-[-1px] overflow-clip right-[-1px] top-[44px]" data-node-id="2:905" data-name="RowsContainer">
+            <div className="absolute inset-0 z-10 flex flex-col bg-white">
+              {(dashboard.recentEvidences.length
+                ? dashboard.recentEvidences
+                : [{ id: '-', name: '최근 등록된 증거물이 없습니다.' }]
+              ).map((item, index) => (
+                <RecentTableRow key={`${item.id}-${index}`} item={item} />
+              ))}
+            </div>
             <div className="border-[#d9d9d9] border-b border-solid content-stretch flex h-[40px] items-center justify-center relative shrink-0 w-[410px]" data-node-id="2:906" data-name="Low 1">
               <div className="border-[#d9d9d9] border-r border-solid content-stretch flex h-[46px] items-center justify-center overflow-clip p-[10px] relative shrink-0 w-[180px]" data-node-id="2:907" data-name="증거물 번호">
                 <p className="flex-[1_0_0] font-['Inter:Light','Noto_Sans_KR:Regular',sans-serif] font-light leading-[normal] min-w-px not-italic relative text-[15px] text-black text-center" data-node-id="2:908">
@@ -327,11 +593,12 @@ export function HomePage({ className, children = null }: HomePageProps) {
             </div>
           </div>
         </div>
-        <a className="absolute contents cursor-pointer left-[327px] top-[31px]" data-node-id="2:961" data-name="전체보기Button" />
-        <a className="absolute bg-[#081c47] block cursor-pointer h-[46px] left-[327px] rounded-[10px] top-[31px] w-[108px]" data-node-id="2:962" />
-        <p className="absolute font-['Inter:Medium','Noto_Sans_KR:Regular',sans-serif] font-medium h-[20px] leading-[normal] left-[351px] not-italic text-[15px] text-white top-[44px] w-[64px]" data-node-id="2:963">
+        <Link to="/EvidenceList" className="absolute bg-[#081c47] block cursor-pointer h-[46px]
+          left-[327px] rounded-[10px] top-[31px] w-[108px] flex items-center justify-center">
+          <span className="text-white text-[15px] font-medium">
           전체 보기
-        </p>
+          </span>
+        </Link>
         <p className="absolute font-['Inter:Medium','Noto_Sans_KR:Regular',sans-serif] font-medium h-[35px] leading-[normal] left-[25px] not-italic text-[25px] text-black top-[41px] w-[137px]" data-node-id="2:964">
           증거물 목록
         </p>
@@ -341,6 +608,14 @@ export function HomePage({ className, children = null }: HomePageProps) {
         <div className="absolute bg-white border border-[#d9d9d9] border-solid h-[584px] left-0 rounded-[15px] top-[6px] w-[469px]" data-node-id="2:967" />
         <div className="absolute border border-[#d9d9d9] border-solid h-[445px] left-[29px] overflow-clip rounded-[10px] top-[109px] w-[410px]" data-node-id="2:968" data-name="사건목록 Table">
           <div className="absolute border border-[#d9d9d9] border-solid content-stretch flex flex-col h-[400px] items-start left-[-1px] overflow-clip right-[-1px] top-[44px]" data-node-id="2:969" data-name="RowsContainer">
+            <div className="absolute inset-0 z-10 flex flex-col bg-white">
+              {(dashboard.recentCases.length
+                ? dashboard.recentCases
+                : [{ id: '-', name: '최근 등록된 사건이 없습니다.' }]
+              ).map((item, index) => (
+                <RecentTableRow key={`${item.id}-${index}`} item={item} />
+              ))}
+            </div>
             <div className="border-[#d9d9d9] border-b border-solid content-stretch flex h-[40px] items-center justify-center relative shrink-0 w-[410px]" data-node-id="2:970" data-name="Low 1">
               <div className="border-[#d9d9d9] border-r border-solid content-stretch flex h-[46px] items-center justify-center overflow-clip p-[10px] relative shrink-0 w-[180px]" data-node-id="2:971" data-name="사건 ID">
                 <p className="flex-[1_0_0] font-['Inter:Light','Noto_Sans_KR:Regular',sans-serif] font-light leading-[normal] min-w-px not-italic relative text-[15px] text-black text-center" data-node-id="2:972">
@@ -477,9 +752,11 @@ export function HomePage({ className, children = null }: HomePageProps) {
         </div>
         <a className="absolute contents cursor-pointer left-[327px] top-[31px]" data-node-id="2:1025" data-name="전체보기Button" />
         <a className="absolute bg-[#081c47] block cursor-pointer h-[46px] left-[327px] rounded-[10px] top-[31px] w-[108px]" data-node-id="2:1026" />
-        <p className="absolute font-['Inter:Medium','Noto_Sans_KR:Regular',sans-serif] font-medium h-[20px] leading-[normal] left-[352px] not-italic text-[15px] text-white top-[44px] w-[64px]" data-node-id="2:1027">
-          전체 보기
-        </p>
+        <Link to="/CaseList" className="absolute bg-[#081c47] block cursor-pointer h-[46px] left-[327px] rounded-[10px] top-[31px] w-[108px] flex items-center justify-center">
+          <span className="text-white text-[15px] font-medium">
+            전체 보기
+          </span>
+        </Link>
         <p className="absolute font-['Inter:Medium','Noto_Sans_KR:Regular',sans-serif] font-medium h-[35px] leading-[normal] left-[25px] not-italic text-[25px] text-black top-[41px] w-[113px]" data-node-id="2:1028">
           사건 목록
         </p>
