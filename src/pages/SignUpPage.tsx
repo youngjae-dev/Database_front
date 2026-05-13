@@ -7,12 +7,18 @@ const imgBg =
   'https://www.figma.com/api/mcp/asset/40087fa6-cf47-4b37-8d7e-d65f553e5a18'
 const imgLogo =
   'https://www.figma.com/api/mcp/asset/5f717098-c863-4098-8dbb-53d6326d94e3'
-const imgWarn =
-  'https://www.figma.com/api/mcp/asset/da6b480c-5e47-41ce-8853-45e42e0388cb'
 const imgChevron =
   'https://www.figma.com/api/mcp/asset/3bd0dd03-cec2-41d1-b099-13bf1a1692a6'
 
 const RANK_OPTIONS = ['경위', '경감', '경사', '경장', '순경'] as const
+
+const DEPARTMENT_OPTIONS = [
+  { label: '수사관', value: 'INVESTIGATOR' },
+  { label: '증거물 보관 담당자', value: 'CUSTODIAN' },
+  { label: '분석관', value: 'ANALYST' },
+  { label: '시스템 관리자', value: 'ADMIN' },
+  { label: '법무 담당자', value: 'LEGAL' },
+]
 
 function FieldDivider() {
   return (
@@ -26,32 +32,24 @@ function FieldDivider() {
 export function SignUpPage() {
   const navigate = useNavigate()
   const [officerId, setOfficerId] = useState('')
-  const [name, setName] = useState('')
-  const [org, setOrg] = useState('')
-  const [rank, setRank] = useState('')
+  const [realName, setRealName] = useState('')
+  const [department, setDepartment] = useState('')
+  const [role, setRole] = useState('')
   const [password, setPassword] = useState('')
-  const [authCode, setAuthCode] = useState('')
-  const [verified, setVerified] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  function handleVerify() {
-    if (authCode.trim().length > 0) setVerified(true)
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    if (!verified) return
     setError(null)
     setIsLoading(true)
 
     const body: UserSignUpRequest = {
-      username: officerId.trim(),
+      userId: officerId.trim(),
+      username: realName.trim(), // 백엔드 username 필드에 실명 저장
       password,
-      name: name.trim(),
-      organization: org.trim(),
-      rank,
-      authCode: authCode.trim(),
+      role: role,
+      department: department,
     }
 
     try {
@@ -103,7 +101,7 @@ export function SignUpPage() {
             회원가입
           </h2>
           <p className="font-['Pretendard:Regular',sans-serif] mt-3 text-[20px] text-[#252525]">
-            발급받은 인증번호를 입력한 승인된 담당자만 회원가입할 수 있습니다.{' '}
+            담당자 정보를 입력하여 회원가입을 진행해 주세요.
           </p>
           <div className="my-5">
             <FieldDivider />
@@ -111,57 +109,70 @@ export function SignUpPage() {
 
           <label
             className="block font-['Pretendard:Medium',sans-serif] text-[20px] text-[#252525]"
-            htmlFor="signup-username"
+            htmlFor="signup-userid"
           >
             Officer ID
           </label>
           <input
-            id="signup-username"
+            id="signup-userid"
             value={officerId}
             onChange={(e) => setOfficerId(e.target.value)}
-            placeholder="ID를 입력하세요"
+            placeholder="사용하실 ID를 입력하세요"
             className="relative z-10 mt-2 h-[41px] w-full rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none placeholder:text-[rgba(37,37,37,0.55)] focus:border-[#081c47]"
           />
 
           <label
             className="font-['Pretendard:Medium',sans-serif] mt-6 block text-[20px] text-[#252525]"
-            htmlFor="signup-name"
+            htmlFor="signup-username"
           >
-            이름
+            이름 (실명)
           </label>
           <input
-            id="signup-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="이름을 입력하세요"
+            id="signup-username"
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+            placeholder="본인의 실명을 입력하세요"
             className="relative z-10 mt-2 h-[41px] w-full rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none placeholder:text-[rgba(37,37,37,0.55)] focus:border-[#081c47]"
           />
 
           <label
             className="font-['Pretendard:Medium',sans-serif] mt-6 block text-[20px] text-[#252525]"
-            htmlFor="signup-org"
+            htmlFor="signup-dept"
           >
-            소속 기관
+            소속 부서
           </label>
-          <input
-            id="signup-org"
-            value={org}
-            onChange={(e) => setOrg(e.target.value)}
-            placeholder="소속기관을 입력하세요"
-            className="relative z-10 mt-2 h-[41px] w-full rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none placeholder:text-[rgba(37,37,37,0.55)] focus:border-[#081c47]"
-          />
+          <div className="relative z-10 mt-2">
+            <select
+              id="signup-dept"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="h-[41px] w-full appearance-none rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 pr-10 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none focus:border-[#081c47]"
+            >
+              <option value="">부서를 선택하세요</option>
+              {DEPARTMENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <img
+              alt=""
+              src={imgChevron}
+              className="pointer-events-none absolute right-3 top-1/2 z-20 size-[31px] -translate-y-1/2"
+            />
+          </div>
 
           <label
             className="font-['Pretendard:Medium',sans-serif] mt-6 block text-[20px] text-[#252525]"
-            htmlFor="signup-rank"
+            htmlFor="signup-role"
           >
             직급
           </label>
           <div className="relative z-10 mt-2">
             <select
-              id="signup-rank"
-              value={rank}
-              onChange={(e) => setRank(e.target.value)}
+              id="signup-role"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
               className="h-[41px] w-full appearance-none rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 pr-10 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none focus:border-[#081c47]"
             >
               <option value="">직급을 선택하세요</option>
@@ -182,7 +193,7 @@ export function SignUpPage() {
             className="font-['Pretendard:Medium',sans-serif] mt-6 block text-[20px] text-[#252525]"
             htmlFor="signup-password"
           >
-            Password{' '}
+            Password
           </label>
           <input
             id="signup-password"
@@ -193,57 +204,16 @@ export function SignUpPage() {
             className="relative z-10 mt-2 h-[41px] w-full rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none placeholder:text-[rgba(37,37,37,0.55)] focus:border-[#081c47]"
           />
 
-          <div className="my-8">
-            <FieldDivider />
-          </div>
-
-          <p className="font-['Pretendard:SemiBold',sans-serif] text-[20px] text-[#081c47]">
-            인증번호 확인
-          </p>
-          <label
-            className="font-['Pretendard:Medium',sans-serif] mt-4 block text-[20px] text-[#252525]"
-            htmlFor="signup-auth"
-          >
-            인증번호
-          </label>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-stretch">
-            <input
-              id="signup-auth"
-              value={authCode}
-              onChange={(e) => setAuthCode(e.target.value)}
-              placeholder="발급받은 인증번호를 입력하세요. "
-              className="relative z-10 h-[41px] min-w-0 flex-1 rounded-[10px] border-2 border-[#d9d9d9] bg-white px-3 font-['Pretendard:Light',sans-serif] text-[15px] text-[#252525] outline-none placeholder:text-[rgba(37,37,37,0.55)] focus:border-[#081c47]"
-            />
-            <button
-              type="button"
-              onClick={handleVerify}
-              className="h-[44px] shrink-0 rounded-[10px] border-2 border-[#081c47] bg-white px-4 font-['Pretendard:Regular',sans-serif] text-[20px] text-[#081c47]"
-            >
-              인증번호 검증{' '}
-            </button>
-          </div>
-          <div className="mt-3 flex items-start gap-2">
-            <img alt="" src={imgWarn} className="mt-0.5 size-[22px] shrink-0" />
-            <p className="font-['Pretendard:Regular',sans-serif] text-[15px] text-[rgba(37,37,37,0.55)]">
-              인증번호 검증이 완료되어야 회원가입이 진행됩니다.{' '}
-            </p>
-          </div>
-          {verified && (
-            <p className="mt-2 text-[15px] font-medium text-emerald-700">
-              인증이 완료되었습니다. 회원가입을 진행할 수 있습니다.
-            </p>
-          )}
-
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
               to="/"
               className="flex h-[44px] flex-1 items-center justify-center rounded-[10px] border-2 border-[rgba(0,0,0,0.25)] bg-transparent font-['Pretendard:Regular',sans-serif] text-[20px] text-black"
             >
-              취소임
+              취소
             </Link>
             <button
               type="submit"
-              disabled={!verified || isLoading}
+              disabled={isLoading}
               className="h-[44px] flex-1 rounded-[10px] border-2 border-[#081c47] bg-[#081c47] font-['Pretendard:Regular',sans-serif] text-[20px] text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? '처리 중…' : '회원가입'}

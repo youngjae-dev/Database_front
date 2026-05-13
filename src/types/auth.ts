@@ -8,15 +8,11 @@ export type LoginRequest = {
 
 /**
  * 백엔드 `UserSignUpRequest` 와 필드명을 맞춥니다.
- * Java DTO 필드명이 다르면 여기만 수정하세요.
  */
 export type UserSignUpRequest = {
-  username: string
+  userId: string   // Officer ID
+  username: string // 실명
   password: string
-  name: string
-  /** 소속 기관 */
-  organization: string
-  rank: string
-  /** 발급 인증번호 */
-  authCode: string
+  role: string
+  department: string
 }
