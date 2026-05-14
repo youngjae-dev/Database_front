@@ -210,11 +210,11 @@ export function HomePage({ className, children = null }: HomePageProps) {
         recentEvidencesResult,
       ] = await Promise.allSettled([
         fetchApiBody('/auth/me'),
-        fetchApiBody('/case/count'),
+        fetchApiBody('/cases/count'),
         fetchApiBody('/evidence/count'),
         fetchApiBody('/handover/in-progress/count'),
-        fetchApiBody('/cases/RecentCases'),
-        fetchApiBody('/evidence/RecentEvidences'),
+        fetchApiBody('/cases/recent'),
+        fetchApiBody('/evidence/recent'),
       ])
 
       if (ignore) return
