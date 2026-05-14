@@ -29,7 +29,7 @@ function FieldDivider() {
   )
 }
 
-export function SignUpPage() {
+function SignUpPage() {
   const navigate = useNavigate()
   const [officerId, setOfficerId] = useState('')
   const [realName, setRealName] = useState('')
@@ -228,3 +228,6 @@ export function SignUpPage() {
     </div>
   )
 }
+
+export { SignUpPage }
+export default SignUpPage

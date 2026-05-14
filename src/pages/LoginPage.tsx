@@ -13,7 +13,7 @@ const imgLogo =
 const imgButtonBg =
   'https://www.figma.com/api/mcp/asset/39cbac89-63c2-43a5-bcaf-a82c4d728027'
 
-export function LoginPage() {
+function LoginPage() {
   const navigate = useNavigate()
   const [officerId, setOfficerId] = useState('')
   const [password, setPassword] = useState('')
@@ -188,3 +188,6 @@ export function LoginPage() {
     </div>
   )
 }
+
+export { LoginPage }
+export default LoginPage

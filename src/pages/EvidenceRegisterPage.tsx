@@ -1,199 +1,337 @@
-<div style={{width: '100%', height: '100%', position: 'relative', backgroundImage: 'url(https://placehold.co/1440x1798)'}}>
-    <div style={{width: 672, height: 87, left: 745, top: 1688, position: 'absolute', overflow: 'hidden'}}>
-        <div style={{width: 200, height: 70, left: 36, top: 9, position: 'absolute'}}>
-            <div style={{width: 200, height: 70, left: 0, top: 0, position: 'absolute', background: '#D9D9D9', borderRadius: 15, border: '2px rgba(0, 0, 0, 0.25) solid'}} />
-            <div style={{left: 74, top: 17, position: 'absolute', textAlign: 'center', color: 'black', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>취소</div>
-        </div>
-        <div style={{width: 199, height: 70, left: 250, top: 9, position: 'absolute'}}>
-            <div style={{width: 200, height: 70, left: 0, top: 0, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 15, border: '2px rgba(0, 0, 0, 0.25) solid'}} />
-            <div style={{left: 44, top: 17, position: 'absolute', textAlign: 'center', color: '#081C47', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>임시 저장</div>
-        </div>
-        <div style={{width: 200, height: 70, left: 464, top: 9, position: 'absolute'}}>
-            <div style={{width: 200, height: 70, left: 0, top: 0, position: 'absolute', background: '#081C47', borderRadius: 15}} />
-            <div style={{left: 48, top: 17, position: 'absolute', textAlign: 'center', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>등록하기</div>
-        </div>
-    </div>
-    <div style={{width: 409, height: 808, left: 1008, top: 861, position: 'absolute', overflow: 'hidden'}}>
-        <div style={{width: 409, height: 808, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 15, border: '2px #D9D9D9 solid'}} />
-        <div style={{width: 364, height: 218, left: 23, top: 579, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 364, height: 206, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '1px #D9D9D9 solid'}} />
-            <div style={{width: 73, height: 28, left: 16, top: 12, position: 'absolute', color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>QR 활용</div>
-            <div style={{width: 151, height: 70, left: 187, top: 45, position: 'absolute'}}>
-                <div style={{width: 151, height: 70, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 76, height: 25, left: 57, top: 22, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>다운로드</div>
-                <img style={{width: 43, height: 43, left: 9, top: 13, position: 'absolute'}} src="https://placehold.co/43x43" />
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import AppShell from '../components/AppShell'
+import { apiFetch, readApiErrorMessage } from '../lib/api'
+
+type CaseRow = {
+  id: number
+  caseName: string
+  description?: string | null
+  status?: string
+  createdAt?: string
+}
+
+const ITEM_TYPES = ['디지털 파일', '물리 증거', '문서', '영상', '기타'] as const
+
+export default function EvidenceRegisterPage() {
+  const [searchParams] = useSearchParams()
+  const initialCaseId = searchParams.get('caseId')
+
+  const [cases, setCases] = useState<CaseRow[]>([])
+  const [caseId, setCaseId] = useState<string>(initialCaseId ?? '')
+  const [caseQuery, setCaseQuery] = useState('')
+  const [itemName, setItemName] = useState('')
+  const [itemType, setItemType] = useState<string>(ITEM_TYPES[0])
+  const [collectedAt, setCollectedAt] = useState('')
+  const [collectedPlace, setCollectedPlace] = useState('')
+  const [detail, setDetail] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [loadingCases, setLoadingCases] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [qrSrc, setQrSrc] = useState<string | null>(null)
+
+  const filteredCases = useMemo(() => {
+    const q = caseQuery.trim().toLowerCase()
+    if (!q) return cases
+    return cases.filter(
+      (c) =>
+        String(c.id).includes(q) ||
+        c.caseName.toLowerCase().includes(q),
+    )
+  }, [cases, caseQuery])
+
+  const selectedCase = useMemo(
+    () => cases.find((c) => String(c.id) === caseId),
+    [cases, caseId],
+  )
+
+  useEffect(() => {
+    let ignore = false
+    ;(async () => {
+      try {
+        const res = await apiFetch('/cases')
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const data = (await res.json()) as CaseRow[]
+        if (!ignore) setCases(Array.isArray(data) ? data : [])
+      } catch {
+        if (!ignore) setCases([])
+      } finally {
+        if (!ignore) setLoadingCases(false)
+      }
+    })()
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (initialCaseId && cases.some((c) => String(c.id) === initialCaseId))
+      setCaseId(initialCaseId)
+  }, [initialCaseId, cases])
+
+  const nowLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat('ko-KR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date()),
+    [],
+  )
+
+  const submit = async () => {
+    setMessage(null)
+    setQrSrc(null)
+    if (!caseId) {
+      setMessage('사건을 선택하세요.')
+      return
+    }
+    if (!itemName.trim()) {
+      setMessage('증거물명을 입력하세요.')
+      return
+    }
+    const fileName = file?.name?.trim() || `${itemName.trim()}.dat`
+    const fd = new FormData()
+    const meta = [
+      detail.trim(),
+      collectedPlace.trim() && `수집 장소: ${collectedPlace.trim()}`,
+      collectedAt && `수집 일시: ${collectedAt}`,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    const combinedName =
+      meta.length > 0 ? `${itemName.trim()} (${meta})`.slice(0, 500) : itemName.trim()
+
+    fd.append('caseId', caseId)
+    fd.append('itemType', itemType)
+    fd.append('fileName', fileName)
+    fd.append('itemName', combinedName)
+    if (file) fd.append('file', file)
+
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/evidence', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const data = (await res.json()) as { qrCodeImage?: string; message?: string }
+      setMessage(data.message ?? '증거물이 등록되었습니다.')
+      if (data.qrCodeImage) setQrSrc(`data:image/png;base64,${data.qrCodeImage}`)
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : '등록에 실패했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <AppShell active="evidence">
+      <div className="p-8 pb-12">
+        <div className="mx-auto max-w-[1100px]">
+        <nav className="mb-8 flex flex-wrap gap-3 text-[14px] text-[#174DC0]">
+          <Link to="/home" className="hover:underline">
+            홈
+          </Link>
+          <span className="text-[#d9d9d9]">|</span>
+          <Link to="/CaseList" className="hover:underline">
+            사건 목록
+          </Link>
+          <span className="text-[#d9d9d9]">|</span>
+          <Link to="/EvidenceList" className="hover:underline">
+            증거물 목록
+          </Link>
+        </nav>
+
+        <header className="mb-8">
+          <h1 className="text-[40px] font-semibold leading-tight text-black">증거물 등록</h1>
+          <p className="mt-2 text-[18px] text-[#252525]">
+            사건을 선택한 뒤 증거물 정보와 파일을 등록합니다.
+          </p>
+        </header>
+
+        {message ? (
+          <p className="mb-4 rounded-[10px] border border-[#d9d9d9] bg-white px-4 py-3 text-[15px] text-[#081c47]">
+            {message}
+          </p>
+        ) : null}
+
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          <div className="space-y-6">
+            <section className="rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+              <h2 className="text-[22px] font-semibold text-black">1. 사건 선택</h2>
+              <input
+                value={caseQuery}
+                onChange={(e) => setCaseQuery(e.target.value)}
+                className="mt-4 w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                placeholder="사건 ID 또는 사건명으로 검색"
+                disabled={loadingCases}
+              />
+              <div className="mt-4 max-h-[220px] overflow-auto rounded-[10px] border-2 border-[#d9d9d9]">
+                {loadingCases ? (
+                  <p className="p-4 text-[15px] text-[#666]">사건 목록을 불러오는 중…</p>
+                ) : filteredCases.length === 0 ? (
+                  <p className="p-4 text-[15px] text-[#666]">표시할 사건이 없습니다.</p>
+                ) : (
+                  filteredCases.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCaseId(String(c.id))}
+                      className={`flex w-full flex-col border-b border-[#eee] px-4 py-3 text-left last:border-b-0 hover:bg-[rgba(167,193,255,0.15)] ${
+                        String(c.id) === caseId ? 'bg-[rgba(167,193,255,0.29)]' : ''
+                      }`}
+                    >
+                      <span className="text-[13px] font-semibold text-[#174DC0]">
+                        #{c.id}
+                      </span>
+                      <span className="text-[17px] text-black">{c.caseName}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="mt-4 rounded-[10px] bg-[rgba(167,193,255,0.29)] p-4 text-[16px]">
+                <span className="font-medium text-black">선택된 사건: </span>
+                {selectedCase ? (
+                  <span className="text-[#174DC0]">
+                    #{selectedCase.id} / {selectedCase.caseName}
+                  </span>
+                ) : (
+                  <span className="text-[#666]">없음</span>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+              <h2 className="text-[22px] font-semibold text-black">2. 증거물 정보 입력</h2>
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-[17px] font-medium">증거물명</span>
+                  <input
+                    value={itemName}
+                    onChange={(e) => setItemName(e.target.value)}
+                    className="w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                    placeholder="증거물명을 입력해주세요"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[17px] font-medium">증거물 유형</span>
+                  <select
+                    value={itemType}
+                    onChange={(e) => setItemType(e.target.value)}
+                    className="w-full rounded-[10px] border-2 border-[#d9d9d9] bg-white px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                  >
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-6 grid gap-6 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-[17px] font-medium">수집일시</span>
+                  <input
+                    type="datetime-local"
+                    value={collectedAt}
+                    onChange={(e) => setCollectedAt(e.target.value)}
+                    className="w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[17px] font-medium">수집 장소</span>
+                  <input
+                    value={collectedPlace}
+                    onChange={(e) => setCollectedPlace(e.target.value)}
+                    className="w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                    placeholder="수집 장소"
+                  />
+                </label>
+              </div>
+              <label className="mt-6 block">
+                <span className="mb-2 block text-[17px] font-medium">증거물 설명</span>
+                <textarea
+                  value={detail}
+                  onChange={(e) => setDetail(e.target.value)}
+                  rows={4}
+                  className="w-full resize-y rounded-[10px] border-2 border-[#d9d9d9] px-4 py-3 text-[16px] outline-none focus:border-[#081c47]"
+                  placeholder="증거물에 대한 설명"
+                />
+              </label>
+              <div className="mt-6">
+                <p className="mb-2 text-[17px] font-medium">증거물 사진 및 파일</p>
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-[10px] border-2 border-dashed border-[#d9d9d9] bg-[rgba(167,193,255,0.2)] px-6 py-10 text-center">
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                  <span className="text-[15px] text-black">
+                    파일을 선택하거나 드래그 영역을 클릭하세요
+                  </span>
+                  <span className="mt-1 text-[14px] text-[#666]">
+                    {file ? file.name : 'JPG, PNG, PDF, MP4 등'}
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <div className="flex flex-wrap justify-end gap-4 pb-10">
+              <Link
+                to="/EvidenceList"
+                className="flex min-w-[140px] items-center justify-center rounded-[15px] border-2 border-[rgba(0,0,0,0.25)] bg-[#d9d9d9] py-4 text-[18px] font-semibold text-black"
+              >
+                취소
+              </Link>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void submit()}
+                className="min-w-[180px] rounded-[15px] bg-[#081c47] py-4 text-[20px] font-medium text-white disabled:opacity-60"
+              >
+                {submitting ? '등록 중…' : '등록하기'}
+              </button>
             </div>
-            <div style={{width: 151, height: 70, left: 16, top: 45, position: 'absolute'}}>
-                <div style={{width: 151, height: 70, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 76, height: 25, left: 57, top: 22, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>라벨 출력</div>
-                <img style={{width: 43, height: 43, left: 9, top: 13, position: 'absolute'}} src="https://placehold.co/43x43" />
-            </div>
-            <div style={{width: 325, height: 64, left: 16, top: 129, position: 'absolute', overflow: 'hidden'}}>
-                <div style={{width: 322, height: 64, left: 0, top: 0, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 234, height: 37, left: 58, top: 14, position: 'absolute', color: 'rgba(37, 37, 37, 0.55)', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>등록 후 QR 라벨을 출력할 수 있습니다.<br/>증거물 등록 완료 후 스캔이 가능합니다.</div>
-                <img style={{width: 40, height: 40, left: 14, top: 12, position: 'absolute'}} src="https://placehold.co/40x40" />
-            </div>
+          </div>
+
+          <div className="space-y-6">
+            <section className="rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-[20px] font-semibold text-black">자동 생성 정보</h2>
+                <span className="rounded-[10px] bg-[rgba(167,193,255,0.29)] px-2 py-1 text-[11px] font-semibold text-[#174DC0]">
+                  등록 시
+                </span>
+              </div>
+              <p className="mt-2 text-[14px] text-[#555]">
+                증거물 ID·해시·QR은 서버에서 생성됩니다.
+              </p>
+              <ul className="mt-4 space-y-3 text-[15px]">
+                <li className="rounded-[10px] border border-[#d9d9d9] p-3">
+                  <span className="text-[#555]">사건 ID</span>
+                  <p className="font-semibold text-[#174DC0]">{caseId || '—'}</p>
+                </li>
+                <li className="rounded-[10px] border border-[#d9d9d9] p-3">
+                  <span className="text-[#555]">등록 일시(현재)</span>
+                  <p className="font-semibold text-[#174DC0]">{nowLabel}</p>
+                </li>
+              </ul>
+            </section>
+
+            <section className="rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+              <h2 className="text-[20px] font-semibold text-black">QR 코드</h2>
+              <p className="mt-2 text-[14px] leading-relaxed text-[#666]">
+                등록이 완료되면 서버에서 내려주는 Base64 이미지를 표시합니다.
+              </p>
+              <div className="mt-4 flex aspect-square max-h-[280px] items-center justify-center rounded-[10px] border-2 border-[#d9d9d9] bg-[#f0f0f0]">
+                {qrSrc ? (
+                  <img src={qrSrc} alt="증거물 QR" className="max-h-full max-w-full" />
+                ) : (
+                  <span className="text-[14px] text-[#888]">등록 후 표시</span>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
-        <div style={{width: 364, height: 137, left: 23, top: 422, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 364, height: 137, left: 0, top: 0, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 10, border: '1px #D9D9D9 solid'}} />
-            <div style={{width: 129, height: 22, left: 55, top: 14, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>QR 생성 기준</div>
-            <div style={{width: 343, height: 75, left: 11, top: 50, position: 'absolute', textAlign: 'center', color: 'rgba(37, 37, 37, 0.55)', fontSize: 18, fontFamily: 'Pretendard', fontWeight: '400', lineHeight: 25, wordWrap: 'break-word'}}>사건번호 + 증거물 파일명 + 등록자 ID 를 <br/>조합한 뒤 SHA-256 해시값을 생성하고, <br/>해당 해시값을 QR 코드로 변환합니다. </div>
-            <img style={{width: 37, height: 37, left: 11, top: 11, position: 'absolute'}} src="https://placehold.co/37x37" />
         </div>
-        <div style={{width: 366, height: 384, left: 21, top: 25, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 364, height: 328, left: 2, top: 43, position: 'absolute'}}>
-                <div style={{width: 364, height: 328, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 280, height: 280, left: 42, top: 24, position: 'absolute', background: '#D9D9D9'}} />
-            </div>
-            <div style={{width: 246, height: 27.95, left: 0, top: -1.18, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>QR 코드 (자동 생성)</div>
-        </div>
-    </div>
-    <div style={{width: 409, height: 560, left: 1008, top: 262, position: 'absolute', overflow: 'hidden'}}>
-        <div style={{width: 409, height: 558, left: 0, top: 1, position: 'absolute', background: 'white', borderRadius: 15, border: '2px #D9D9D9 solid'}} />
-        <div style={{width: 173, height: 26, left: 21, top: 27, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>자동 생성 정보</div>
-        <div style={{width: 286, height: 18, left: 28, top: 56, position: 'absolute', color: 'black', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>아래 정보는 증거물 등록 시 자동으로 생성됩니다.</div>
-        <div style={{width: 367, height: 91, left: 19, top: 438, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 367, height: 91, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 79, height: 22, left: 100, top: 17, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>등록자 ID</div>
-            <div style={{width: 246, height: 23, paddingLeft: 3, paddingRight: 3, paddingTop: 10, paddingBottom: 10, left: 100, top: 45, position: 'absolute', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex'}}>
-                <div style={{color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>ewid1201</div>
-            </div>
-        </div>
-        <div style={{width: 367, height: 91, left: 19, top: 324, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 367, height: 91, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 79, height: 22, left: 100, top: 17, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>등록 일시</div>
-            <div style={{width: 252, height: 23, paddingLeft: 3, paddingRight: 3, paddingTop: 10, paddingBottom: 10, left: 100, top: 45, position: 'absolute', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex'}}>
-                <div style={{color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>2024-05-16 </div>
-                <div style={{color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>+ 현재 시각(분)</div>
-            </div>
-        </div>
-        <div style={{width: 367, height: 91, left: 19, top: 210, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 367, height: 91, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 140, height: 22, left: 100, top: 17, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>증거물 고유번호</div>
-            <img style={{width: 55, height: 58, left: 25, top: 16, position: 'absolute'}} src="https://placehold.co/55x58" />
-            <div style={{width: 246, height: 23, paddingLeft: 3, paddingRight: 3, paddingTop: 10, paddingBottom: 10, left: 100, top: 45, position: 'absolute', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex'}}>
-                <div style={{color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>EVD-2024-000128</div>
-            </div>
-        </div>
-        <img style={{width: 65, height: 55, left: 44, top: 342, position: 'absolute'}} src="https://placehold.co/65x55" />
-        <div style={{width: 367, height: 91, left: 19, top: 96, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 367, height: 91, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 79, height: 22, left: 100, top: 17, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>사건번호</div>
-            <div style={{width: 246, height: 23, paddingLeft: 3, paddingRight: 3, paddingTop: 10, paddingBottom: 10, left: 100, top: 45, position: 'absolute', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex'}}>
-                <div style={{color: '#174DC0', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>CASE-2024-002</div>
-            </div>
-            <img style={{width: 63, height: 58, left: 21, top: 16, position: 'absolute'}} src="https://placehold.co/63x58" />
-        </div>
-        <img style={{width: 59, height: 52, left: 44, top: 458, position: 'absolute'}} src="https://placehold.co/59x52" />
-        <div style={{width: 64, height: 29, left: 322, top: 24, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 10}} />
-        <div style={{width: 50, height: 16, left: 332, top: 32, position: 'absolute', color: '#174DC0', fontSize: 12, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>자동 생성</div>
-    </div>
-    <div style={{width: 589, height: 808, left: 402, top: 861, position: 'absolute', overflow: 'hidden'}}>
-        <div style={{width: 589, height: 808, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 15, border: '2px #D9D9D9 solid'}} />
-        <div style={{width: 547, height: 154, left: 19, top: 632, position: 'absolute'}}>
-            <div style={{width: 546, height: 114, left: 0, top: 40, position: 'absolute', overflow: 'hidden'}}>
-                <div style={{width: 264, height: 22, left: 142, top: 66, position: 'absolute', color: 'black', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}> 파일을 드래그하거나 클릭하여 업로드하세요</div>
-                <div style={{width: 164, height: 22, left: 192, top: 87, position: 'absolute', color: 'rgba(37, 37, 37, 0.55)', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>JPG, PNG, PDF, MP4 등 </div>
-                <div style={{width: 546, height: 114, left: 0, top: 0, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <img style={{width: 76, height: 57, left: 236, top: 9, position: 'absolute'}} src="https://placehold.co/76x57" />
-            </div>
-            <div style={{width: 241, height: 16.68, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>증거물 사진 및 파일 </div>
-        </div>
-        <div style={{width: 545, height: 506, left: 18, top: 58, position: 'absolute'}}>
-            <div style={{width: 264, height: 94, left: 281, top: 397, position: 'absolute'}}>
-                <div style={{width: 264, height: 57, left: 0, top: 37, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 211, height: 25, left: 13, top: 53, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>수집 장소를 입력해주세요</div>
-                <div style={{width: 107, height: 22, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>수집장소</div>
-            </div>
-            <div style={{width: 264, height: 94, left: 0, top: 397, position: 'absolute'}}>
-                <div style={{width: 264, height: 57, left: 0, top: 37, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 31, height: 31, left: 223, top: 50, position: 'absolute', overflow: 'hidden'}}>
-                    <div style={{width: 15.50, height: 7.75, left: 7.75, top: 11.63, position: 'absolute', outline: '1.60px #081C47 solid', outlineOffset: '-0.80px'}} />
-                </div>
-                <div style={{width: 166, height: 25, left: 13, top: 53, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>날짜를 선택해주세요</div>
-                <div style={{width: 107, height: 22, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>수집일시</div>
-            </div>
-            <div style={{width: 547, height: 240, left: 0, top: 134, position: 'absolute'}}>
-                <div style={{width: 547, height: 22, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>증거물 설명</div>
-                <div style={{width: 546.09, height: 200, left: 0, top: 40, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 280, height: 25, left: 13, top: 53, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>증거물에 대한 설명을 입력해주세요</div>
-            </div>
-            <div style={{width: 260, height: 90, left: 282, top: 19, position: 'absolute'}}>
-                <div style={{width: 94, height: 24, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>증거물 유형</div>
-                <div style={{width: 263, height: 54, left: 0, top: 39, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 31, height: 31, left: 222, top: 50, position: 'absolute', overflow: 'hidden'}}>
-                    <div style={{width: 15.50, height: 7.75, left: 7.75, top: 11.63, position: 'absolute', outline: '1.60px #081C47 solid', outlineOffset: '-0.80px'}} />
-                </div>
-                <div style={{width: 205, height: 25, left: 13, top: 53, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>유형를 선택해주세요</div>
-            </div>
-            <div style={{width: 260, height: 90, left: 1, top: 19, position: 'absolute'}}>
-                <div style={{width: 263, height: 54, left: 0, top: 40, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-                <div style={{width: 205, height: 25, left: 13, top: 53, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>증거물명을 입력해주세요</div>
-                <div style={{width: 79, height: 22, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>증거물명</div>
-            </div>
-        </div>
-        <div style={{width: 187, height: 27, left: 21, top: 25, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>2. 증거물 정보 입력</div>
-    </div>
-    <div style={{width: 589, height: 560, left: 401, top: 262, position: 'absolute', overflow: 'hidden'}}>
-        <div style={{width: 589, height: 560, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 15, border: '2px #D9D9D9 solid'}} />
-        <div style={{width: 539, height: 101, left: 24, top: 440, position: 'absolute'}}>
-            <div style={{width: 539, height: 101, left: 0, top: 0, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 502, left: 18, top: 54, position: 'absolute', justifyContent: 'flex-start', alignItems: 'center', gap: 10, display: 'inline-flex'}}>
-                <div style={{color: '#174DC0', fontSize: 22, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>CASE-2024-002</div>
-                <div style={{color: '#174DC0', fontSize: 22, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>/</div>
-                <div style={{color: '#174DC0', fontSize: 22, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>디지털 증거 사건</div>
-            </div>
-            <div style={{width: 92, height: 24, left: 17, top: 21, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>선택된 사건</div>
-        </div>
-        <div style={{width: 538, height: 253, left: 25, top: 165, position: 'absolute'}}>
-            <div style={{width: 542, height: 246, left: -4, top: 7, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 154, height: 28.60, left: -4, top: -30.80, position: 'absolute', color: 'black', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>등록된 사건 목록</div>
-        </div>
-        <div style={{width: 545, height: 54, left: 18, top: 62, position: 'absolute'}}>
-            <div style={{width: 545, height: 54, left: 0, top: 0, position: 'absolute', background: 'white', borderRadius: 10, border: '2px #D9D9D9 solid'}} />
-            <div style={{width: 305, height: 25, left: 19, top: 14, position: 'absolute', color: 'rgba(0, 0, 0, 0.25)', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '300', wordWrap: 'break-word'}}>사건번호 또는 사건명으로 검색하세요</div>
-            <div style={{width: 32, height: 34, left: 489, top: 10, position: 'absolute', overflow: 'hidden'}}>
-                <div style={{width: 24, height: 25.50, left: 4, top: 4.25, position: 'absolute', outline: '1.60px var(--Icon-Default-Secondary, #757575) solid', outlineOffset: '-0.80px'}} />
-            </div>
-            <div style={{width: 108, height: 26, left: 3, top: -37, position: 'absolute', color: 'black', fontSize: 23, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>1. 사건 선택</div>
-        </div>
-    </div>
-    <div style={{width: 432, height: 111.55, left: 402, top: 107.88, position: 'absolute'}}>
-        <div style={{width: 432, height: 29.42, left: 0, top: 82.13, position: 'absolute', color: '#252525', fontSize: 20, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>증거물 정보를 입력하고 파일을 업로드하세요.</div>
-        <div style={{width: 282.22, height: 73.55, left: 0, top: 0, position: 'absolute', color: 'black', fontSize: 50, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'}}>증거물 등록</div>
-    </div>
-    <div style={{width: 528, height: 0, left: 424, top: 1453, position: 'absolute', outline: '2px #D9D9D9 solid', outlineOffset: '-1px'}}></div>
-    <div style={{width: 1079, height: 90, left: 361, top: 1.76, position: 'absolute'}}>
-        <div style={{width: 1079, height: 90, left: 0, top: 0, position: 'absolute', background: 'white', boxShadow: '0px 2px 3px rgba(166.73, 193.21, 255, 0.29)', borderRadius: 5}} />
-        <img style={{width: 55, height: 54, left: 800, top: 18, position: 'absolute'}} src="https://placehold.co/55x54" />
-        <div style={{left: 955, top: 45, position: 'absolute', color: 'black', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '200', wordWrap: 'break-word'}}>수사관</div>
-        <div style={{left: 868, top: 29, position: 'absolute', color: 'black', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>홍길동</div>
-        <div style={{width: 57, height: 57, left: 11, top: 15.24, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 38, height: 38, left: 9.50, top: 9.50, position: 'absolute', background: '#081C47'}} />
-        </div>
-    </div>
-    <div style={{width: 346, height: 1798, left: 0, top: 0, position: 'absolute', background: '#081C47', overflow: 'hidden'}}>
-        <img style={{width: 78, height: 83, left: 27, top: 1685, position: 'absolute'}} src="https://placehold.co/78x83" />
-        <div style={{width: 123, height: 57, left: 115, top: 1698, position: 'absolute', overflow: 'hidden'}}>
-            <div style={{width: 194, height: 48, left: 6, top: 9, position: 'absolute', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', letterSpacing: 0.60, wordWrap: 'break-word'}}>로그아웃</div>
-        </div>
-        <div style={{width: 276, height: 80, left: 35, top: 587, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 15}} />
-        <img style={{width: 37.78, height: 43, left: 54, top: 603, position: 'absolute'}} src="https://placehold.co/38x43" />
-        <div style={{width: 169, height: 35, left: 120, top: 609, position: 'absolute', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>마이페이지</div>
-        <div style={{width: 276, height: 80, left: 36, top: 473.50, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 15}} />
-        <img style={{width: 58, height: 35, left: 50, top: 494, position: 'absolute'}} src="https://placehold.co/58x35" />
-        <div style={{width: 169, height: 35, left: 120, top: 494, position: 'absolute', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>인수인계</div>
-        <div style={{width: 276, height: 80, left: 36, top: 239.50, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 15}} />
-        <div style={{width: 169, height: 35, left: 120, top: 262, position: 'absolute', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>사건 관리</div>
-        <img style={{width: 39, height: 37, left: 54, top: 262, position: 'absolute'}} src="https://placehold.co/39x37" />
-        <div style={{width: 276, height: 80, left: 36, top: 355, position: 'absolute', background: 'white', borderRadius: 15}} />
-        <div style={{width: 169, height: 35, left: 120, top: 376, position: 'absolute', color: '#081C47', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>증거물 관리</div>
-        <img style={{width: 42, height: 40, left: 56, top: 372, position: 'absolute'}} src="https://placehold.co/42x40" />
-        <div style={{width: 276, height: 80, left: 36, top: 130, position: 'absolute', background: 'rgba(166.73, 193.21, 255, 0.29)', borderRadius: 15}} />
-        <img style={{width: 38, height: 43, left: 54, top: 147, position: 'absolute'}} src="https://placehold.co/38x43" />
-        <div style={{width: 169, height: 35, left: 120, top: 155, position: 'absolute', color: 'white', fontSize: 30, fontFamily: 'Pretendard', fontWeight: '500', wordWrap: 'break-word'}}>홈</div>
-        <div style={{width: 172, height: 27, left: 41, top: 99, position: 'absolute', color: '#D9D9D9', fontSize: 15, fontFamily: 'Pretendard', fontWeight: '400', wordWrap: 'break-word'}}>NAVIGATION</div>
-        <div style={{width: 187, height: 42, left: 95, top: 24, position: 'absolute'}}><span style="color: 'white', fontSize: 35, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'">Case</span><span style="color: 'rgba(255, 255, 255, 0.10)', fontSize: 35, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'"> </span><span style="color: '#FF8A00', fontSize: 35, fontFamily: 'Pretendard', fontWeight: '600', wordWrap: 'break-word'">Lock</span></div>
-        <img style={{width: 68, height: 68, left: 27, top: 10, position: 'absolute'}} src="https://placehold.co/68x68" />
-    </div>
-</div>
+      </div>
+    </AppShell>
+  )
+}
