@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import { figma, figmaCls } from '../design/tokens'
+import { formatDepartmentLabel } from '../lib/departmentLabels'
 import { apiFetch } from '../lib/api'
 
 type HomePageProps = {
@@ -38,14 +40,6 @@ const DEFAULT_DASHBOARD: HomeDashboard = {
   recentRegisteredCount: null,
   recentCases: [],
   recentEvidences: [],
-}
-
-const DEPARTMENT_LABELS: Record<string, string> = {
-  INVESTIGATOR: '수사관',
-  CUSTODIAN: '증거물 보관 담당자',
-  ANALYST: '분석관',
-  ADMIN: '시스템 관리자',
-  LEGAL: '법무 담당자',
 }
 
 async function readJsonOrText(res: Response): Promise<unknown> {
@@ -154,18 +148,14 @@ function parseRecentItems(
     })
 }
 
-function formatDepartment(department: string): string {
-  return DEPARTMENT_LABELS[department] ?? department
-}
-
 function formatCount(count: number | null): string {
   return count === null ? '-' : count.toLocaleString('ko-KR')
 }
 
 function RecentTableRow({ item }: { item: RecentListItem }) {
   return (
-    <tr className="border-b border-[#ececec] last:border-b-0">
-      <td className="w-[42%] max-w-0 border-r border-[#ececec] px-3 py-2.5 text-center text-[15px] text-black">
+    <tr className="border-b border-[#D9D9D9] last:border-b-0">
+      <td className="w-[42%] max-w-0 border-r border-[#D9D9D9] px-3 py-2.5 text-center text-[15px] text-black">
         <span className="block truncate">{item.id}</span>
       </td>
       <td className="max-w-0 px-3 py-2.5 text-center text-[15px] text-black">
@@ -185,8 +175,11 @@ function StatCard({
   unit?: string
 }) {
   return (
-    <div className="rounded-[15px] border border-[#e8ecf4] bg-white p-5 shadow-[1px_2px_10px_rgba(0,0,0,0.08)]">
-      <p className="text-[15px] text-[#252525]">{title}</p>
+    <div
+      className={`${figmaCls.panel} p-5`}
+      style={{ boxShadow: figma.cardShadow }}
+    >
+      <p className="font-['Inter',sans-serif] text-[20px] font-normal text-[#252525]">{title}</p>
       <p className="mt-2 text-[0]">
         <span className="text-[28px] font-semibold text-black">{value}</span>
         <span className="ml-1 text-[16px] font-normal text-black">{unit}</span>
@@ -215,26 +208,29 @@ function RecentPanel({
   const rows = items.length ? items : [{ id: '-', name: emptyMessage }]
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col rounded-[15px] border border-[#d9d9d9] bg-white shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#f0f0f0] px-5 py-4">
+    <section
+      className={`flex min-h-0 flex-1 flex-col ${figmaCls.panel}`}
+      style={{ boxShadow: figma.cardShadow }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-[#D9D9D9] px-5 py-4">
         <div>
-          <h2 className="text-[22px] font-semibold text-black">{title}</h2>
-          <p className="mt-1 text-[15px] text-[#252525]">{subtitle}</p>
+          <h2 className="font-['Inter',sans-serif] text-[25px] font-medium text-black">{title}</h2>
+          <p className="mt-1 font-['Inter',sans-serif] text-[20px] font-normal text-[#252525]">{subtitle}</p>
         </div>
         <Link
           to={viewAllTo}
-          className="inline-flex h-9 shrink-0 items-center justify-center rounded-[10px] bg-[#081c47] px-4 text-[14px] font-medium text-white hover:bg-[#0a2560]"
+          className="inline-flex h-[46px] min-w-[108px] shrink-0 items-center justify-center whitespace-nowrap rounded-[10px] bg-[#081C47] px-5 font-['Inter',sans-serif] text-[15px] font-medium leading-none text-white transition hover:bg-[#0a2560]"
         >
           전체 보기
         </Link>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        <div className="overflow-hidden rounded-[10px] border border-[#d9d9d9]">
+        <div className={figmaCls.innerTable}>
           <table className="w-full table-fixed border-collapse text-center">
             <thead>
-              <tr className="bg-[rgba(167,193,255,0.29)] text-[15px] font-medium text-black">
-                <th className="border-b border-r border-[#d9d9d9] py-3">{col1}</th>
-                <th className="border-b border-[#d9d9d9] py-3">{col2}</th>
+              <tr className={`${figmaCls.tableHead} text-[15px] font-medium`}>
+                <th className="border-b-2 border-r-2 border-[#D9D9D9] py-3">{col1}</th>
+                <th className="border-b-2 border-[#D9D9D9] py-3">{col2}</th>
               </tr>
             </thead>
             <tbody>{rows.map((item, index) => (
@@ -320,7 +316,7 @@ function HomePage({ children = null }: HomePageProps) {
 
   const username = dashboard.user.username || '-'
   const department = dashboard.user.department
-    ? formatDepartment(dashboard.user.department)
+    ? formatDepartmentLabel(dashboard.user.department)
     : '-'
   const caseCount = formatCount(dashboard.caseCount)
   const evidenceCount = formatCount(dashboard.evidenceCount)
@@ -329,28 +325,15 @@ function HomePage({ children = null }: HomePageProps) {
   )
   const recentRegisteredCount = formatCount(dashboard.recentRegisteredCount)
 
-  const headerRight = (
-    <div className="flex items-center gap-3 text-right">
-      <div>
-        <p className="text-[16px] font-semibold text-[#081c47]">{username}</p>
-        <p className="text-[13px] text-[#6b7280]">{department}</p>
-      </div>
-      <div
-        className="size-10 shrink-0 rounded-full border border-[#e8ecf4] bg-[rgba(167,193,255,0.35)]"
-        aria-hidden
-      />
-    </div>
-  )
-
   return (
-    <AppShell active="home" headerRight={headerRight}>
-      <div className="min-h-full bg-[#f5f7fb] p-8 pb-12">
+    <AppShell active="home">
+      <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
         <div className="mx-auto max-w-[1100px]">
           {children ?? (
             <>
               <header className="mb-8">
-                <h1 className="text-[40px] font-semibold leading-tight text-black">홈</h1>
-                <p className="mt-2 text-[18px] text-[#252525]">
+                <h1 className={figmaCls.titlePage}>홈</h1>
+                <p className={`mt-2 ${figmaCls.subtitle}`}>
                   {username} {department}님, 환영합니다.
                 </p>
               </header>

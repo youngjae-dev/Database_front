@@ -1,5 +1,8 @@
-import { type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { figma } from '../design/tokens'
+import { formatDepartmentLabel } from '../lib/departmentLabels'
+import { apiFetch } from '../lib/api'
 
 const TOKEN_KEY = 'token'
 
@@ -8,8 +11,103 @@ export type AppNavKey = 'home' | 'cases' | 'evidence' | 'handover' | 'mypage'
 type AppShellProps = {
   active: AppNavKey
   children: ReactNode
-  /** 오른쪽 상단(기본: Case Lock / 수사관 대신 표시) */
-  headerRight?: ReactNode
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+}
+
+function parseMeForHeader(raw: unknown): {
+  displayName: string
+  roleLine: string
+  photoUrl: string | null
+} {
+  const data = asRecord(raw)
+  const nested = asRecord(data?.data) ?? data
+  if (!nested) {
+    return { displayName: '—', roleLine: '—', photoUrl: null }
+  }
+  const displayName =
+    typeof nested.username === 'string'
+      ? nested.username
+      : typeof nested.name === 'string'
+        ? nested.name
+        : '—'
+  const department = typeof nested.department === 'string' ? nested.department : ''
+  const roleLine = department ? formatDepartmentLabel(department) : '—'
+
+  const photoKeys = ['avatarUrl', 'profileImageUrl', 'profileImage', 'photoUrl', 'photo'] as const
+  let photoUrl: string | null = null
+  for (const k of photoKeys) {
+    const v = nested[k]
+    if (typeof v === 'string' && v.trim()) {
+      photoUrl = v.trim()
+      break
+    }
+  }
+
+  return { displayName: displayName || '—', roleLine, photoUrl }
+}
+
+function HeaderProfileAvatar({ src }: { src: string | null }) {
+  const ok =
+    src &&
+    (src.startsWith('http') || src.startsWith('/') || src.startsWith('data:'))
+  if (ok) {
+    return (
+      <img
+        src={src}
+        alt=""
+        width={48}
+        height={48}
+        className="size-11 shrink-0 rounded-full border-2 border-[#D9D9D9] object-cover md:size-12"
+        decoding="async"
+      />
+    )
+  }
+  return (
+    <div
+      className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-[#D9D9D9] bg-[rgba(167,193,255,0.35)] md:size-12"
+      aria-hidden
+    >
+      <svg className="size-6 text-[#081C47]/55" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+      </svg>
+    </div>
+  )
+}
+
+/** 모든 앱 페이지 우상단 통일: 이름 + 직책(부서) + 프로필 사진 */
+function AppShellHeaderProfile() {
+  const [profile, setProfile] = useState(() => parseMeForHeader(null))
+
+  useEffect(() => {
+    let ignore = false
+    apiFetch('/auth/me')
+      .then(async (res) => {
+        if (!res.ok) return
+        const raw: unknown = await res.json()
+        if (!ignore) setProfile(parseMeForHeader(raw))
+      })
+      .catch(() => {})
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  return (
+    <div className="flex max-w-[min(100%,320px)] items-center gap-3 text-right">
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-['Inter',sans-serif] text-[clamp(1rem,2vw,1.5rem)] font-medium leading-tight text-black">
+          {profile.displayName}
+        </p>
+        <p className="truncate font-['Inter',sans-serif] text-[15px] font-extralight leading-tight text-black">
+          {profile.roleLine}
+        </p>
+      </div>
+      <HeaderProfileAvatar src={profile.photoUrl} />
+    </div>
+  )
 }
 
 function NavIconHome({ className }: { className?: string }) {
@@ -81,7 +179,7 @@ function NavIconLogout({ className }: { className?: string }) {
 function navItemClass(active: boolean, opts: { disabled?: boolean } = {}) {
   const { disabled } = opts
   return [
-    'flex items-center gap-3 rounded-[14px] px-3 py-3.5 text-[16px] font-medium transition-colors',
+    'flex min-h-[72px] items-center gap-3 rounded-[15px] px-3 py-2 text-[22px] font-medium transition-colors md:min-h-[80px] md:text-[28px] lg:text-[30px]',
     active
       ? 'bg-white text-[#081c47] shadow-sm'
       : 'text-white hover:bg-white/10',
@@ -89,7 +187,7 @@ function navItemClass(active: boolean, opts: { disabled?: boolean } = {}) {
   ].join(' ')
 }
 
-export default function AppShell({ active, children, headerRight }: AppShellProps) {
+export default function AppShell({ active, children }: AppShellProps) {
   const location = useLocation()
 
   function logout() {
@@ -101,24 +199,32 @@ export default function AppShell({ active, children, headerRight }: AppShellProp
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f5f7fb] font-['Pretendard',system-ui,sans-serif] text-[#252525]">
-      <aside className="flex w-[280px] shrink-0 flex-col bg-[#081c47] px-3 pb-6 pt-7 text-white">
-        <div className="flex items-center gap-3 px-2">
+    <div
+      className="flex min-h-screen font-['Pretendard',system-ui,sans-serif] text-[#252525]"
+      style={{ backgroundColor: figma.pageBg }}
+    >
+      <aside
+        className="flex w-[min(100%,346px)] max-w-[346px] shrink-0 flex-col px-3 pb-6 pt-6 text-white md:px-4"
+        style={{ backgroundColor: figma.navy }}
+      >
+        <div className="flex items-center gap-3 px-1">
           <img
             src="/caselock-logo.svg"
             alt=""
-            width={44}
-            height={44}
-            className="size-11 shrink-0 rounded-full object-cover"
+            width={68}
+            height={68}
+            className="size-[52px] shrink-0 rounded-full object-cover md:size-[68px]"
             decoding="async"
           />
           <div className="leading-tight">
-            <span className="text-[21px] font-semibold tracking-tight text-white">Case</span>
-            <span className="text-[21px] font-semibold tracking-tight text-[#ff8a00]">Lock</span>
+            <span className="text-[28px] font-semibold tracking-tight text-white md:text-[35px]">Case</span>
+            <span className="text-[28px] font-semibold tracking-tight text-[#ff8a00] md:text-[35px]"> Lock</span>
           </div>
         </div>
 
-        <nav className="mt-10 flex flex-col gap-0.5">
+        <p className="mt-6 px-2 text-[15px] font-normal tracking-wide text-[#d9d9d9]">NAVIGATION</p>
+
+        <nav className="mt-2 flex flex-col gap-1">
           <Link to="/home" className={navItemClass(active === 'home')}>
             <NavIconHome className="size-6 shrink-0" />
             홈
@@ -156,7 +262,10 @@ export default function AppShell({ active, children, headerRight }: AppShellProp
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e8ecf4] bg-white px-8 shadow-[0_2px_8px_rgba(8,28,71,0.06)]">
+        <header
+          className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e8ecf4] bg-white px-6 md:h-[90px] md:px-8"
+          style={{ boxShadow: figma.headerShadow }}
+        >
           <p className="text-[14px] text-[#6b7280]">
             {location.pathname === '/home' && '홈'}
             {location.pathname === '/CaseList' && '사건 · 목록'}
@@ -167,12 +276,7 @@ export default function AppShell({ active, children, headerRight }: AppShellProp
             {location.pathname === '/Handover' && '인수인계'}
             {location.pathname === '/MyPage' && '마이페이지'}
           </p>
-          {headerRight ?? (
-            <div className="text-right text-[14px] text-[#374151]">
-              <span className="font-medium text-[#081c47]">Case Lock</span>
-              <span className="ml-2 text-[#9ca3af]">수사관</span>
-            </div>
-          )}
+          <AppShellHeaderProfile />
         </header>
         <div className="min-h-0 flex-1 overflow-auto">{children}</div>
       </div>

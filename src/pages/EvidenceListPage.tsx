@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
 
 type RecentEvidence = {
@@ -79,17 +80,18 @@ export default function EvidenceListPage() {
 
   return (
     <AppShell active="evidence">
-      <div className="p-8 pb-12">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
+        <div className="mx-auto max-w-[1100px]">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-[40px] font-semibold leading-tight text-black">증거물 목록</h1>
-            <p className="mt-2 text-[18px] text-[#555]">
+            <h1 className={figmaCls.titlePage}>증거물 목록</h1>
+            <p className={`mt-2 max-w-xl ${figmaCls.subtitle}`}>
               최근 등록된 증거물부터 확인할 수 있습니다.
             </p>
           </div>
           <Link
             to="/EvidenceRegister"
-            className="inline-flex items-center justify-center rounded-[14px] bg-[#081c47] px-8 py-3 text-[18px] font-semibold text-white shadow-sm transition hover:bg-[#0a2560]"
+            className={`inline-flex h-[52px] min-h-[52px] w-full shrink-0 items-center justify-center md:h-[56px] md:min-h-[56px] md:min-w-[220px] md:w-auto ${figmaCls.btnPrimary}`}
           >
             + 증거물 등록
           </Link>
@@ -100,14 +102,14 @@ export default function EvidenceListPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-[12px] border-2 border-[#d9d9d9] bg-white py-3 pl-4 pr-4 text-[17px] outline-none focus:border-[#081c47]"
+              className={`w-full ${figmaCls.inputBox}`}
               placeholder="증거물 번호·파일명·유형으로 검색"
             />
           </div>
         </div>
 
-        <p className="mb-3 text-[15px] text-[#555]">
-          총 <span className="font-semibold text-black">{filtered.length}</span>건
+        <p className="mb-3 font-['Inter',sans-serif] text-[15px] text-black">
+          총 <span className="font-semibold">{filtered.length}</span>건
           {query.trim() ? ' (필터 적용)' : ''} | 최신 등록순
         </p>
 
@@ -117,7 +119,7 @@ export default function EvidenceListPage() {
           </p>
         ) : null}
 
-        <section className="overflow-hidden rounded-[15px] border-2 border-[#d9d9d9] bg-white shadow-sm">
+        <section className={`${figmaCls.panel} overflow-hidden`} style={{ boxShadow: figma.cardShadow }}>
           <div className="grid grid-cols-1 gap-0 border-b border-[#d9d9d9] bg-[rgba(167,193,255,0.29)] text-center text-[15px] font-medium text-black md:grid-cols-[120px_1fr_120px_140px_100px_100px]">
             <div className="hidden border-r border-[#d9d9d9] p-3 md:block">증거물 번호</div>
             <div className="hidden border-r border-[#d9d9d9] p-3 md:block">증거물명</div>
@@ -164,6 +166,7 @@ export default function EvidenceListPage() {
             </ul>
           )}
         </section>
+        </div>
       </div>
     </AppShell>
   )

@@ -1,17 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { figma } from '../design/tokens'
 import { apiFetch, parseApiErrorBody } from '../lib/api'
 import type { LoginRequest } from '../types/auth'
 
 const TOKEN_KEY = 'token'
 const REMEMBER_ID_KEY = 'rememberedUsername'
-
-const imgLogIn =
-  'https://www.figma.com/api/mcp/asset/7a187763-ffb3-4e32-b68a-50046d228e7e'
-const imgLogo =
-  'https://www.figma.com/api/mcp/asset/37380eb0-cae6-43f4-82c6-5b2f2b3d94a8'
-const imgButtonBg =
-  'https://www.figma.com/api/mcp/asset/39cbac89-63c2-43a5-bcaf-a82c4d728027'
 
 function LoginPage() {
   const navigate = useNavigate()
@@ -70,35 +64,31 @@ function LoginPage() {
 
   return (
     <div
-      className="relative min-h-screen w-full overflow-hidden"
+      className="relative min-h-screen w-full overflow-hidden font-['Pretendard',system-ui,sans-serif]"
       data-name="LogIn"
+      style={{
+        background: `linear-gradient(180deg, #eef3fb 0%, ${figma.pageBg} 42%, #e4eaf5 100%)`,
+      }}
     >
-      <img
-        alt=""
-        className="pointer-events-none absolute inset-0 size-full max-w-none object-cover"
-        src={imgLogIn}
-      />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:radial-gradient(circle_at_20%_10%,rgba(167,193,255,0.45)_0%,transparent_50%),radial-gradient(circle_at_80%_90%,rgba(8,28,71,0.08)_0%,transparent_45%)]" />
+
       <div className="relative mx-auto flex min-h-screen max-w-[1440px] flex-col items-center px-4 pb-10 pt-7">
-        <div className="relative size-[208px] shrink-0">
-          <img
-            alt="Case Lock"
-            className="pointer-events-none absolute inset-0 size-full max-w-none object-cover"
-            src={imgLogo}
-          />
-        </div>
+        <img
+          src="/caselock-logo.svg"
+          alt="Case Lock"
+          width={208}
+          height={208}
+          className="size-[clamp(120px,22vw,208px)] shrink-0 object-contain"
+          decoding="async"
+        />
         <h1 className="mt-3 text-center font-semibold leading-none">
-          <span className="text-[clamp(2.5rem,8vw,5.32rem)] text-[#071b48]">
-            Case
-          </span>
-          <span className="text-[clamp(2.5rem,8vw,5.32rem)] text-[#ff8a00]">
-            {' '}
-            Lock
-          </span>
+          <span className="text-[clamp(2.5rem,8vw,5.32rem)] text-[#071b48]">Case</span>
+          <span className="text-[clamp(2.5rem,8vw,5.32rem)] text-[#ff8a00]"> Lock</span>
         </h1>
 
         <form
           onSubmit={handleSubmit}
-          className="relative mt-10 w-full max-w-[618px] rounded-[15.2px] bg-white p-8 shadow-lg shadow-black/5 md:p-10"
+          className="relative mt-10 w-full max-w-[618px] rounded-[15.2px] border-2 border-[#D9D9D9] bg-white p-8 shadow-[1px_2px_10px_rgba(0,0,0,0.12)] md:p-10"
         >
           {error ? (
             <p
@@ -109,10 +99,7 @@ function LoginPage() {
             </p>
           ) : null}
 
-          <label
-            className="block font-['Pretendard:Regular',sans-serif] text-[30px] text-black"
-            htmlFor="officer-id"
-          >
+          <label className="block text-[30px] text-black" htmlFor="officer-id">
             Officer ID
           </label>
           <input
@@ -122,13 +109,10 @@ function LoginPage() {
             placeholder="Enter your officer ID"
             value={officerId}
             onChange={(e) => setOfficerId(e.target.value)}
-            className="font-['Pretendard:Thin',sans-serif] mt-3 h-[89px] w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 text-[32px] text-[#534545] outline-none placeholder:text-[#534545]/70 focus:border-[#081c47]"
+            className="mt-3 h-[89px] w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 text-[32px] font-extralight text-[#534545] outline-none placeholder:text-[#534545]/70 focus:border-[#081c47]"
           />
 
-          <label
-            className="font-['Pretendard:Regular',sans-serif] mt-8 block text-[30px] text-black"
-            htmlFor="password"
-          >
+          <label className="mt-8 block text-[30px] text-black" htmlFor="password">
             Password
           </label>
           <input
@@ -139,7 +123,7 @@ function LoginPage() {
             placeholder="Enter your Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="font-['Pretendard:Thin',sans-serif] mt-3 h-[89px] w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 text-[32px] text-[#534545] outline-none placeholder:text-[#534545]/70 focus:border-[#081c47]"
+            className="mt-3 h-[89px] w-full rounded-[10px] border-2 border-[#d9d9d9] px-4 text-[32px] font-extralight text-[#534545] outline-none placeholder:text-[#534545]/70 focus:border-[#081c47]"
           />
 
           <label className="mt-8 flex cursor-pointer items-center gap-3 select-none">
@@ -149,30 +133,21 @@ function LoginPage() {
               onChange={(e) => setRemember(e.target.checked)}
               className="size-[31px] rounded-[8px] border-2 border-[#d9d9d9] accent-[#081c47]"
             />
-            <span className="font-['Pretendard:Regular',sans-serif] text-[25px] text-black">
-              아이디 저장
-            </span>
+            <span className="text-[25px] text-black">아이디 저장</span>
           </label>
 
-          <div className="relative mt-10">
+          <div className="mt-10">
             <button
               type="submit"
               disabled={isLoading}
-              className="relative flex h-[89px] w-full items-center justify-center overflow-hidden rounded-[10px] bg-[#081c47] text-white disabled:opacity-60"
+              className="flex h-[89px] w-full items-center justify-center rounded-[10px] bg-[#081c47] text-[36px] font-bold text-white shadow-sm transition hover:bg-[#0a2560] disabled:opacity-60"
             >
-              <img
-                alt=""
-                className="pointer-events-none absolute inset-0 size-full max-w-none"
-                src={imgButtonBg}
-              />
-              <span className="relative font-['Pretendard:Bold',sans-serif] text-[36px]">
-                {isLoading ? '처리 중…' : '로그인'}
-              </span>
+              {isLoading ? '처리 중…' : '로그인'}
             </button>
           </div>
         </form>
 
-        <p className="font-['Pretendard:ExtraLight',sans-serif] mt-10 text-center text-[30px] text-[#776060]">
+        <p className="mt-10 text-center text-[30px] font-extralight" style={{ color: figma.loginMuted }}>
           계정이 없으신가요?{' '}
           <Link
             to="/signup"
@@ -181,7 +156,7 @@ function LoginPage() {
             회원가입
           </Link>
         </p>
-        <p className="font-['Pretendard:ExtraLight',sans-serif] mt-6 max-w-[640px] text-center text-[22px] text-black">
+        <p className="mt-6 max-w-[640px] text-center text-[22px] font-extralight text-black">
           승인된 접근만 허용됩니다. 모든 활동은 해시체인 암호화로 기록됩니다.
         </p>
       </div>

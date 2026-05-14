@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
 
 const CASE_TYPES = ['실종', '살인', '절도', '사기', '디지털 증거', '기타'] as const
@@ -138,7 +139,7 @@ export default function CaseRegisterPage() {
 
   return (
     <AppShell active="cases">
-      <div className="p-8 pb-12">
+      <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
         <div className="mx-auto max-w-[970px]">
         <nav className="mb-8 flex flex-wrap gap-3 text-[14px] text-[#174DC0]">
           <Link to="/home" className="hover:underline">
@@ -155,10 +156,8 @@ export default function CaseRegisterPage() {
         </nav>
 
         <header className="mb-8">
-          <h1 className="text-[40px] font-semibold leading-tight text-black">사건 등록</h1>
-          <p className="mt-2 text-[18px] text-[#252525]">
-            사건 정보를 입력하고 등록합니다.
-          </p>
+          <h1 className={figmaCls.titlePage}>사건 등록</h1>
+          <p className={`mt-2 ${figmaCls.subtitle}`}>사건 정보를 입력하고 등록합니다.</p>
         </header>
 
         {message ? (
@@ -167,7 +166,7 @@ export default function CaseRegisterPage() {
           </p>
         ) : null}
 
-        <section className="mb-6 rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+        <section className={`mb-6 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
           <h2 className="text-[22px] font-semibold text-black">1. 기본 정보</h2>
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <label className="block">
@@ -215,7 +214,7 @@ export default function CaseRegisterPage() {
           </label>
         </section>
 
-        <section className="mb-6 rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+        <section className={`mb-6 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
           <h2 className="text-[22px] font-semibold text-black">2. 담당 정보</h2>
           <p className="mt-1 text-[14px] text-[#666]">
             아래 항목은 설명(description) 필드에 함께 저장됩니다.
@@ -262,7 +261,7 @@ export default function CaseRegisterPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-[15px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+        <section className={`mb-8 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-[22px] font-semibold text-black">자동 생성 정보</h2>
             <span className="rounded-[10px] bg-[rgba(167,193,255,0.29)] px-3 py-1 text-[12px] font-semibold text-[#174DC0]">
@@ -291,21 +290,21 @@ export default function CaseRegisterPage() {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="min-w-[160px] rounded-[15px] border-2 border-[rgba(0,0,0,0.25)] bg-[#d9d9d9] py-4 text-[20px] font-semibold text-black"
+            className="inline-flex min-h-[44px] min-w-[120px] items-center justify-center whitespace-nowrap rounded-[15px] border-2 border-[rgba(0,0,0,0.25)] bg-[#d9d9d9] px-4 py-3 text-[15px] font-semibold leading-none text-black sm:min-w-[140px] sm:text-[16px]"
           >
             취소
           </button>
           <button
             type="button"
             onClick={saveDraft}
-            className="min-w-[160px] rounded-[15px] border-2 border-[rgba(0,0,0,0.25)] bg-[rgba(167,193,255,0.29)] py-4 text-[20px] font-semibold text-[#081c47]"
+            className="inline-flex min-h-[44px] min-w-[120px] items-center justify-center whitespace-nowrap rounded-[15px] border-2 border-[rgba(0,0,0,0.25)] bg-[rgba(167,193,255,0.29)] px-4 py-3 text-[15px] font-semibold leading-none text-[#081c47] sm:min-w-[140px] sm:text-[16px]"
           >
             임시 저장
           </button>
           <button
             type="button"
             onClick={loadDraft}
-            className="min-w-[160px] rounded-[15px] border-2 border-[#d9d9d9] bg-white py-4 text-[18px] font-medium text-[#081c47]"
+            className="inline-flex min-h-[44px] min-w-[200px] items-center justify-center whitespace-nowrap rounded-[15px] border-2 border-[#d9d9d9] bg-white px-4 py-3 text-[14px] font-medium leading-none text-[#081c47] sm:min-w-[220px] sm:text-[15px]"
           >
             임시 저장 불러오기
           </button>
@@ -313,7 +312,7 @@ export default function CaseRegisterPage() {
             type="button"
             disabled={saving}
             onClick={() => void submit()}
-            className="min-w-[180px] rounded-[15px] bg-[#081c47] py-4 text-[20px] font-medium text-white disabled:opacity-60"
+            className="inline-flex min-h-[48px] min-w-[160px] items-center justify-center whitespace-nowrap rounded-[15px] bg-[#081c47] px-5 py-3 text-[16px] font-semibold leading-none text-white disabled:opacity-60 md:min-w-[180px] md:text-[17px]"
           >
             {saving ? '등록 중…' : '등록하기'}
           </button>

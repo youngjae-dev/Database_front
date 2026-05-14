@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
+import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
 
 type CaseRow = {
@@ -71,7 +72,7 @@ export default function CaseDetailPage() {
 
   return (
     <AppShell active="cases">
-      <div className="p-8 pb-12">
+      <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
         <div className="mx-auto max-w-[1000px]">
         <nav className="mb-8 flex flex-wrap gap-3 text-[14px] text-[#174DC0]">
           <Link to="/home" className="hover:underline">
@@ -88,10 +89,8 @@ export default function CaseDetailPage() {
         </nav>
 
         <header className="mb-8">
-          <h1 className="text-[40px] font-semibold leading-tight text-black">사건 정보</h1>
-          <p className="mt-2 text-[18px] text-[#252525]">
-            선택한 사건의 기본 정보와 개요를 확인합니다.
-          </p>
+          <h1 className={figmaCls.titlePage}>사건 정보</h1>
+          <p className={`mt-2 ${figmaCls.subtitle}`}>선택한 사건의 기본 정보와 개요를 확인합니다.</p>
         </header>
 
         {loading ? (
@@ -102,7 +101,7 @@ export default function CaseDetailPage() {
           </p>
         ) : row ? (
           <>
-            <section className="mb-6 rounded-[10px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+            <section className={`mb-6 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
               <h2 className="text-[22px] font-semibold text-black">기본정보</h2>
               <div className="mt-6 grid gap-0 overflow-hidden rounded-[10px] border border-[#d9d9d9] md:grid-cols-2">
                 {[
@@ -126,14 +125,14 @@ export default function CaseDetailPage() {
               </div>
             </section>
 
-            <section className="mb-6 rounded-[10px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+            <section className={`mb-6 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
               <h2 className="text-[22px] font-semibold text-black">사건 개요 및 설명</h2>
               <div className="mt-4 min-h-[120px] whitespace-pre-wrap rounded-[10px] border border-[#d9d9d9] bg-[#fafafa] p-4 text-[17px] leading-relaxed text-black">
                 {row.description?.trim() ? row.description : '등록된 설명이 없습니다.'}
               </div>
             </section>
 
-            <section className="rounded-[10px] border-2 border-[#d9d9d9] bg-white p-6 shadow-sm">
+            <section className={`${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
               <h2 className="text-[22px] font-semibold text-black">처리 이력</h2>
               <p className="mt-2 text-[16px] text-[#555]">
                 처리 일시·유형·담당자 이력 API가 연결되면 이 영역에 표시할 수 있습니다.
