@@ -9,6 +9,8 @@ type RecentEvidence = {
   fileName?: string
   itemType?: string
   itemName?: string
+  createdAt?: string
+  handler?: string
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -37,6 +39,8 @@ function parseRow(item: unknown): RecentEvidence {
     fileName: typeof o.fileName === 'string' ? o.fileName : '',
     itemType: typeof o.itemType === 'string' ? o.itemType : '',
     itemName: typeof o.itemName === 'string' ? o.itemName : '',
+    createdAt: typeof o.createdAt === 'string' ? o.createdAt : '',
+    handler: typeof o.handler === 'string' ? o.handler : '',
   }
 }
 
@@ -140,6 +144,28 @@ export default function EvidenceListPage() {
             <ul>
               {filtered.map((r) => {
                 const name = r.itemName?.trim() || r.fileName || '—'
+                
+                // 날짜 포맷팅 (YYYY-MM-DD HH:mm 형식)
+                let formattedDate = '—'
+                if (r.createdAt) {
+                  try {
+                    const d = new Date(r.createdAt)
+                    if (!isNaN(d.getTime())) {
+                       formattedDate = d.toLocaleString('ko-KR', {
+                         year: 'numeric',
+                         month: '2-digit',
+                         day: '2-digit',
+                         hour: '2-digit',
+                         minute: '2-digit'
+                       })
+                    } else {
+                       formattedDate = r.createdAt.substring(0, 16).replace('T', ' ')
+                    }
+                  } catch {
+                     formattedDate = r.createdAt
+                  }
+                }
+                
                 return (
                   <li
                     key={r.evidenceId ?? name}
@@ -150,8 +176,8 @@ export default function EvidenceListPage() {
                     </div>
                     <div className="border-[#d9d9d9] p-3 text-left text-black md:border-r">{name}</div>
                     <div className="border-[#d9d9d9] p-3 md:border-r">{r.itemType || '—'}</div>
-                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">—</div>
-                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">—</div>
+                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r whitespace-nowrap overflow-hidden text-ellipsis">{formattedDate}</div>
+                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">{r.handler || '—'}</div>
                     <div className="flex flex-wrap items-center justify-center gap-2 p-2">
                       <Link
                         to={`/EvidenceRegister`}
