@@ -75,8 +75,6 @@ export default function HandoverPage() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupErr, setLookupErr] = useState<string | null>(null)
 
-  const [manualHash, setManualHash] = useState('')
-
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [toUserId, setToUserId] = useState('')
   const [reason, setReason] = useState('')
@@ -232,7 +230,7 @@ export default function HandoverPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-[20px] font-semibold text-black">QR 스캔</h2>
-                <p className="mt-1 text-[15px] text-[#555]">카메라로 QR을 읽거나, 해시 문자열을 직접 붙여넣을 수 있습니다.</p>
+                <p className="mt-1 text-[15px] text-[#555]">카메라로 QR을 읽어 증거물을 조회합니다.</p>
               </div>
               <button
                 type="button"
@@ -244,22 +242,6 @@ export default function HandoverPage() {
               >
                 <span aria-hidden>▣</span>
                 QR 스캔 시작
-              </button>
-            </div>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-              <input
-                value={manualHash}
-                onChange={(e) => setManualHash(e.target.value)}
-                placeholder="스캔 결과 또는 initialHash 붙여넣기"
-                className={`min-h-[48px] flex-1 ${figmaCls.inputBox}`}
-              />
-              <button
-                type="button"
-                disabled={lookupLoading || !manualHash.trim()}
-                onClick={() => void performLookup(manualHash.trim())}
-                className="h-[48px] shrink-0 rounded-[15px] border-2 border-[#081C47] bg-white px-5 text-[15px] font-semibold text-[#081C47] disabled:opacity-40"
-              >
-                해시로 조회
               </button>
             </div>
           </section>
@@ -359,7 +341,6 @@ export default function HandoverPage() {
                     type="button"
                     onClick={() => {
                       setLookup(null)
-                      setManualHash('')
                       setSubmitMsg(null)
                       setLookupErr(null)
                     }}

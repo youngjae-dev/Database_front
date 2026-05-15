@@ -12,7 +12,20 @@ type CaseRow = {
   createdAt?: string
 }
 
+type EvidenceRegisterResponse = {
+  message?: string
+  initialHash?: string
+  currentHash?: string
+  qrCodeImage?: string
+}
+
 const ITEM_TYPES = ['디지털 파일', '물리 증거', '문서', '영상', '기타'] as const
+
+function toQrImageSrc(qrCodeImage: string): string {
+  return qrCodeImage.startsWith('data:')
+    ? qrCodeImage
+    : `data:image/png;base64,${qrCodeImage}`
+}
 
 export default function EvidenceRegisterPage() {
   const [searchParams] = useSearchParams()
@@ -31,6 +44,8 @@ export default function EvidenceRegisterPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [qrSrc, setQrSrc] = useState<string | null>(null)
+  const [registeredEvidence, setRegisteredEvidence] =
+    useState<EvidenceRegisterResponse | null>(null)
 
   const filteredCases = useMemo(() => {
     const q = caseQuery.trim().toLowerCase()
@@ -66,11 +81,6 @@ export default function EvidenceRegisterPage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (initialCaseId && cases.some((c) => String(c.id) === initialCaseId))
-      setCaseId(initialCaseId)
-  }, [initialCaseId, cases])
-
   const nowLabel = useMemo(
     () =>
       new Intl.DateTimeFormat('ko-KR', {
@@ -83,6 +93,7 @@ export default function EvidenceRegisterPage() {
   const submit = async () => {
     setMessage(null)
     setQrSrc(null)
+    setRegisteredEvidence(null)
     if (!caseId) {
       setMessage('사건을 선택하세요.')
       return
@@ -91,7 +102,16 @@ export default function EvidenceRegisterPage() {
       setMessage('증거물명을 입력하세요.')
       return
     }
-    const fileName = file?.name?.trim() || `${itemName.trim()}.dat`
+    if (!file) {
+      setMessage('등록할 증거물 파일을 선택하세요.')
+      return
+    }
+    if (file.size === 0) {
+      setMessage('빈 파일은 등록할 수 없습니다.')
+      return
+    }
+
+    const fileName = file.name.trim()
     const fd = new FormData()
     const meta = [
       detail.trim(),
@@ -107,15 +127,20 @@ export default function EvidenceRegisterPage() {
     fd.append('itemType', itemType)
     fd.append('fileName', fileName)
     fd.append('itemName', combinedName)
-    if (file) fd.append('file', file)
+    fd.append('file', file, fileName)
 
     setSubmitting(true)
     try {
-      const res = await apiFetch('/evidence', { method: 'POST', body: fd })
+      // FormData 전송 시 Content-Type은 fetch가 boundary와 함께 자동 지정한다.
+      const res = await apiFetch('/evidence', {
+        method: 'POST',
+        body: fd,
+      })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const data = (await res.json()) as { qrCodeImage?: string; message?: string }
+      const data = (await res.json()) as EvidenceRegisterResponse
+      setRegisteredEvidence(data)
       setMessage(data.message ?? '증거물이 등록되었습니다.')
-      if (data.qrCodeImage) setQrSrc(`data:image/png;base64,${data.qrCodeImage}`)
+      if (data.qrCodeImage) setQrSrc(toQrImageSrc(data.qrCodeImage))
     } catch (e) {
       setMessage(e instanceof Error ? e.message : '등록에 실패했습니다.')
     } finally {
@@ -310,6 +335,18 @@ export default function EvidenceRegisterPage() {
                 <li className="rounded-[10px] border border-[#d9d9d9] p-3">
                   <span className="text-[#555]">등록 일시(현재)</span>
                   <p className="font-semibold text-[#174DC0]">{nowLabel}</p>
+                </li>
+                <li className="rounded-[10px] border border-[#d9d9d9] p-3">
+                  <span className="text-[#555]">초기 해시</span>
+                  <p className="break-all font-semibold text-[#174DC0]">
+                    {registeredEvidence?.initialHash || '등록 후 생성'}
+                  </p>
+                </li>
+                <li className="rounded-[10px] border border-[#d9d9d9] p-3">
+                  <span className="text-[#555]">현재 해시</span>
+                  <p className="break-all font-semibold text-[#174DC0]">
+                    {registeredEvidence?.currentHash || '등록 후 생성'}
+                  </p>
                 </li>
               </ul>
             </section>

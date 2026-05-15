@@ -273,6 +273,7 @@ export default function AppShell({ active, children }: AppShellProps) {
             {location.pathname === '/CaseRegister' && '사건 · 등록'}
             {location.pathname.startsWith('/CaseDetail') && '사건 · 상세'}
             {location.pathname === '/EvidenceRegister' && '증거물 · 등록'}
+            {location.pathname.startsWith('/EvidenceDetail') && '증거물 · 상세'}
             {location.pathname === '/Handover' && '인수인계'}
             {location.pathname === '/MyPage' && '마이페이지'}
           </p>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { BrowserQRCodeReader, type IScannerControls } from '@zxing/browser'
 
 type Props = {
   active: boolean
@@ -6,59 +7,65 @@ type Props = {
   onError?: (message: string) => void
 }
 
-function hasBarcodeDetector(): boolean {
-  return typeof window !== 'undefined' && 'BarcodeDetector' in window
+function cameraSupportError(): string | null {
+  if (typeof window === 'undefined') return '브라우저 환경에서만 카메라를 사용할 수 있습니다.'
+  if (!window.isSecureContext) {
+    return '카메라는 HTTPS 또는 localhost 주소에서만 사용할 수 있습니다. 개발 서버는 http://localhost:포트 로 접속해 주세요.'
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    return '이 브라우저에서 카메라 접근 API를 사용할 수 없습니다.'
+  }
+  return null
 }
 
-/**
- * QR 인식: Chrome/Edge 등의 BarcodeDetector + 카메라(또는 QR 이미지 파일).
- * 별도 npm 패키지 없이 동작합니다.
- */
+function cameraErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return '카메라를 시작할 수 없습니다. 권한을 허용했는지 확인해 주세요.'
+  if (error.name === 'NotAllowedError') return '카메라 권한이 거부되었습니다. 브라우저 주소창의 카메라 권한을 허용해 주세요.'
+  if (error.name === 'NotFoundError') return '사용 가능한 카메라를 찾지 못했습니다.'
+  if (error.name === 'NotReadableError') return '카메라를 다른 앱이 사용 중이거나 장치를 열 수 없습니다.'
+  if (error.name === 'OverconstrainedError') return '요청한 카메라 설정을 사용할 수 없습니다.'
+  return error.message || '카메라를 시작할 수 없습니다.'
+}
+
 export default function HandoverQrScanner({ active, onResult, onError }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const rafRef = useRef<number>(0)
+  const controlsRef = useRef<IScannerControls | null>(null)
+  const readerRef = useRef<BrowserQRCodeReader | null>(null)
   const onResultRef = useRef(onResult)
-  onResultRef.current = onResult
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+
+  useEffect(() => {
+    onResultRef.current = onResult
+    onErrorRef.current = onError
+  }, [onResult, onError])
+
   const stopCamera = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    rafRef.current = 0
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    const v = videoRef.current
-    if (v) {
-      v.srcObject = null
-    }
+    controlsRef.current?.stop()
+    controlsRef.current = null
+    const video = videoRef.current
+    if (video) video.srcObject = null
+  }, [])
+
+  const getReader = useCallback(() => {
+    readerRef.current ??= new BrowserQRCodeReader()
+    return readerRef.current
   }, [])
 
   const decodeFromFile = useCallback(
     async (file: File) => {
-      if (!hasBarcodeDetector()) {
-        onErrorRef.current?.('이 브라우저는 QR 이미지 인식(BarcodeDetector)을 지원하지 않습니다. 해시를 직접 입력하거나 Chrome/Edge를 사용해 주세요.')
-        return
-      }
+      const url = URL.createObjectURL(file)
       try {
-        const BD = (
-          window as unknown as {
-            BarcodeDetector: new (opts: { formats: string[] }) => {
-              detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>
-            }
-          }
-        ).BarcodeDetector
-        const detector = new BD({ formats: ['qr_code'] })
-        const bmp = await createImageBitmap(file)
-        const codes = await detector.detect(bmp)
-        bmp.close?.()
-        const text = codes[0]?.rawValue?.trim()
+        const result = await getReader().decodeFromImageUrl(url)
+        const text = result.getText().trim()
         if (text) onResultRef.current(text)
         else onErrorRef.current?.('QR을 읽지 못했습니다. 더 선명한 이미지를 사용해 주세요.')
       } catch {
-        onErrorRef.current?.('QR 이미지 처리 중 오류가 발생했습니다.')
+        onErrorRef.current?.('QR 이미지에서 코드를 찾지 못했습니다.')
+      } finally {
+        URL.revokeObjectURL(url)
       }
     },
-    [],
+    [getReader],
   )
 
   useEffect(() => {
@@ -67,10 +74,9 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
       return
     }
 
-    if (!hasBarcodeDetector()) {
-      onErrorRef.current?.(
-        '이 브라우저는 카메라 QR 스캔을 지원하지 않습니다. Chrome 또는 Edge를 사용하거나, 아래에서 QR 이미지를 선택·해시를 직접 입력해 주세요.',
-      )
+    const supportError = cameraSupportError()
+    if (supportError) {
+      onErrorRef.current?.(supportError)
       return
     }
 
@@ -81,47 +87,29 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
 
     ;(async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        })
+        const controls = await getReader().decodeFromConstraints(
+          {
+            video: {
+              facingMode: { ideal: 'environment' },
+            },
+            audio: false,
+          },
+          video,
+          (result) => {
+            const text = result?.getText().trim()
+            if (!text) return
+            stopCamera()
+            onResultRef.current(text)
+          },
+        )
+
         if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop())
+          controls.stop()
           return
         }
-        streamRef.current = stream
-        video.srcObject = stream
-        await video.play()
-
-        const BD = (
-          window as unknown as {
-            BarcodeDetector: new (opts: { formats: string[] }) => {
-              detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>
-            }
-          }
-        ).BarcodeDetector
-        const detector = new BD({ formats: ['qr_code'] })
-
-        const tick = async () => {
-          if (cancelled || !videoRef.current) return
-          try {
-            const codes = await detector.detect(videoRef.current)
-            const text = codes[0]?.rawValue?.trim()
-            if (text) {
-              stopCamera()
-              onResultRef.current(text)
-              return
-            }
-          } catch {
-            /* 프레임마다 실패할 수 있음 */
-          }
-          rafRef.current = requestAnimationFrame(() => void tick())
-        }
-        void tick()
-      } catch (e) {
-        onErrorRef.current?.(
-          e instanceof Error ? e.message : '카메라를 시작할 수 없습니다. 권한을 허용했는지 확인해 주세요.',
-        )
+        controlsRef.current = controls
+      } catch (error) {
+        if (!cancelled) onErrorRef.current?.(cameraErrorMessage(error))
       }
     })()
 
@@ -129,7 +117,7 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
       cancelled = true
       stopCamera()
     }
-  }, [active, stopCamera])
+  }, [active, getReader, stopCamera])
 
   return (
     <div className="space-y-4">

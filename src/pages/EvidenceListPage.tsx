@@ -3,49 +3,15 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
-
-type RecentEvidence = {
-  evidenceId?: string
-  fileName?: string
-  itemType?: string
-  itemName?: string
-  createdAt?: string
-  handler?: string
-}
-
-function asRecord(v: unknown): Record<string, unknown> | null {
-  return v && typeof v === 'object' ? (v as Record<string, unknown>) : null
-}
-
-function parseRecentEvidenceList(raw: unknown): RecentEvidence[] {
-  if (!Array.isArray(raw)) {
-    const data = asRecord(raw)
-    const inner = data?.data ?? data?.content ?? data?.items
-    if (!Array.isArray(inner)) return []
-    return inner.map(parseRow)
-  }
-  return raw.map(parseRow)
-}
-
-function parseRow(item: unknown): RecentEvidence {
-  const o = asRecord(item) ?? {}
-  return {
-    evidenceId:
-      typeof o.evidenceId === 'string'
-        ? o.evidenceId
-        : typeof o.id === 'number' || typeof o.id === 'string'
-          ? String(o.id)
-          : '',
-    fileName: typeof o.fileName === 'string' ? o.fileName : '',
-    itemType: typeof o.itemType === 'string' ? o.itemType : '',
-    itemName: typeof o.itemName === 'string' ? o.itemName : '',
-    createdAt: typeof o.createdAt === 'string' ? o.createdAt : '',
-    handler: typeof o.handler === 'string' ? o.handler : '',
-  }
-}
+import {
+  formatEvidenceDate,
+  parseEvidenceList,
+  parseEvidenceNameType,
+  type EvidenceSummary,
+} from '../lib/evidenceDisplay'
 
 export default function EvidenceListPage() {
-  const [rows, setRows] = useState<RecentEvidence[]>([])
+  const [rows, setRows] = useState<EvidenceSummary[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +23,7 @@ export default function EvidenceListPage() {
         const res = await apiFetch('/evidence/recent')
         if (!res.ok) throw new Error(await readApiErrorMessage(res))
         const data = (await res.json()) as unknown
-        if (!ignore) setRows(parseRecentEvidenceList(data))
+        if (!ignore) setRows(parseEvidenceList(data))
       } catch (e) {
         if (!ignore)
           setError(e instanceof Error ? e.message : '목록을 불러오지 못했습니다.')
@@ -74,7 +40,8 @@ export default function EvidenceListPage() {
     const q = query.trim().toLowerCase()
     if (!q) return rows
     return rows.filter((r) => {
-      const hay = [r.evidenceId, r.fileName, r.itemName, r.itemType]
+      const display = parseEvidenceNameType(r)
+      const hay = [r.evidenceId, r.fileName, display.name, display.type]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -143,47 +110,27 @@ export default function EvidenceListPage() {
           ) : (
             <ul>
               {filtered.map((r) => {
-                const name = r.itemName?.trim() || r.fileName || '—'
-                
-                // 날짜 포맷팅 (YYYY-MM-DD HH:mm 형식)
-                let formattedDate = '—'
-                if (r.createdAt) {
-                  try {
-                    const d = new Date(r.createdAt)
-                    if (!isNaN(d.getTime())) {
-                       formattedDate = d.toLocaleString('ko-KR', {
-                         year: 'numeric',
-                         month: '2-digit',
-                         day: '2-digit',
-                         hour: '2-digit',
-                         minute: '2-digit'
-                       })
-                    } else {
-                       formattedDate = r.createdAt.substring(0, 16).replace('T', ' ')
-                    }
-                  } catch {
-                     formattedDate = r.createdAt
-                  }
-                }
+                const display = parseEvidenceNameType(r)
+                const formattedDate = formatEvidenceDate(r.createdAt)
                 
                 return (
                   <li
-                    key={r.evidenceId ?? name}
+                    key={r.evidenceId ?? display.name}
                     className="grid border-t border-[#d9d9d9] text-[14px] md:grid-cols-[120px_1fr_120px_140px_100px_100px] md:items-center md:text-center"
                   >
                     <div className="border-[#d9d9d9] p-3 font-semibold text-[#174dc0] md:border-r">
                       {r.evidenceId || '—'}
                     </div>
-                    <div className="border-[#d9d9d9] p-3 text-left text-black md:border-r">{name}</div>
-                    <div className="border-[#d9d9d9] p-3 md:border-r">{r.itemType || '—'}</div>
+                    <div className="border-[#d9d9d9] p-3 text-left text-black md:border-r">{display.name}</div>
+                    <div className="border-[#d9d9d9] p-3 md:border-r">{display.type}</div>
                     <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">{formattedDate}</div>
                     <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">{r.handler || '—'}</div>
                     <div className="flex flex-wrap items-center justify-center gap-2 p-2">
                       <Link
-                        to={`/EvidenceRegister`}
+                        to={`/EvidenceDetail/${r.evidenceId}`}
                         className="rounded-[10px] border border-[#174dc0] bg-[rgba(167,193,255,0.29)] px-3 py-1.5 text-[13px] font-medium text-black hover:bg-[rgba(167,193,255,0.45)]"
                       >
-                        연계 등록
+                        상세 정보
                       </Link>
                     </div>
                   </li>

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import CaseDetailPage from './pages/CaseDetailPage'
 import CaseListPage from './pages/CaseListPage'
 import CaseRegisterPage from './pages/CaseRegisterPage'
+import EvidenceDetailPage from './pages/EvidenceDetailPage'
 import EvidenceListPage from './pages/EvidenceListPage'
 import EvidenceRegisterPage from './pages/EvidenceRegisterPage'
 import HandoverPage from './pages/HandoverPage'
@@ -53,6 +54,14 @@ export default function App() {
           element={
             <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
               <EvidenceRegisterPage />
+            </div>
+          }
+        />
+        <Route
+          path="/EvidenceDetail/:evidenceId"
+          element={
+            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+              <EvidenceDetailPage />
             </div>
           }
         />
