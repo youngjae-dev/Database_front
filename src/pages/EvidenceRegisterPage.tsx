@@ -113,25 +113,16 @@ export default function EvidenceRegisterPage() {
 
     const fileName = file.name.trim()
     const fd = new FormData()
-    const meta = [
-      detail.trim(),
-      collectedPlace.trim() && `수집 장소: ${collectedPlace.trim()}`,
-      collectedAt && `수집 일시: ${collectedAt}`,
-    ]
-      .filter(Boolean)
-      .join(' · ')
-    const combinedName =
-      meta.length > 0 ? `${itemName.trim()} (${meta})`.slice(0, 500) : itemName.trim()
-
+    
     fd.append('caseId', caseId)
     fd.append('itemType', itemType)
     fd.append('fileName', fileName)
-    fd.append('itemName', combinedName)
+    fd.append('itemName', itemName.trim())
+    if (detail.trim()) fd.append('description', detail.trim())
     fd.append('file', file, fileName)
 
     setSubmitting(true)
     try {
-      // FormData 전송 시 Content-Type은 fetch가 boundary와 함께 자동 지정한다.
       const res = await apiFetch('/evidence', {
         method: 'POST',
         body: fd,
