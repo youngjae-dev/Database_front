@@ -176,7 +176,7 @@ export default function EvidenceListPage() {
                     </div>
                     <div className="border-[#d9d9d9] p-3 text-left text-black md:border-r">{name}</div>
                     <div className="border-[#d9d9d9] p-3 md:border-r">{r.itemType || '—'}</div>
-                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r whitespace-nowrap overflow-hidden text-ellipsis">{formattedDate}</div>
+                    <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">{formattedDate}</div>
                     <div className="border-[#d9d9d9] p-3 text-[13px] text-[#555] md:border-r">{r.handler || '—'}</div>
                     <div className="flex flex-wrap items-center justify-center gap-2 p-2">
                       <Link
