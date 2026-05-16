@@ -135,7 +135,7 @@ function parseRecentItems(
   const nameKeys =
     type === 'case'
       ? ['caseName', 'name', 'title']
-      : ['evidenceName', 'name', 'title']
+      : ['itemName', 'evidenceName', 'name', 'title']
 
   return parseList(value)
     .slice(0, 10)
