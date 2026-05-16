@@ -101,7 +101,7 @@ function StatMini({
     accent === 'orange' ? 'border-[#FF8A00]/40' : 'border-[#D9D9D9]'
   return (
     <div
-      className={`${figmaCls.panel} p-4 ${accent === 'orange' ? 'ring-1 ring-[#FF8A00]/30' : ''}`}
+      className={`${figmaCls.panel} ${border} p-4 ${accent === 'orange' ? 'ring-1 ring-[#FF8A00]/30' : ''}`}
       style={{ boxShadow: figma.cardShadow }}
     >
       <p className="text-[14px] text-[#555]">{title}</p>
