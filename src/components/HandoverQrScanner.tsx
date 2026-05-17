@@ -87,11 +87,11 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
 
     ;(async () => {
       try {
+        // Mac/노트북 환경에서 facingMode: environment 옵션으로 인한 검은 화면 버그를 우회합니다.
+        // 가장 기본적이고 안정적인 카메라 스트림(video: true)을 요청하도록 단순화합니다.
         const controls = await getReader().decodeFromConstraints(
           {
-            video: {
-              facingMode: { ideal: 'environment' },
-            },
+            video: true,
             audio: false,
           },
           video,
