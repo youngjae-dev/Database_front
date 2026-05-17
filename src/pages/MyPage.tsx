@@ -22,8 +22,10 @@ type CaseRow = {
 
 type EvidenceRow = {
   id: number
+  caseId?: number | null
   fileName?: string
   itemType?: string
+  itemName?: string
   holderUserId?: string | null
   holderUsername?: string
 }
@@ -43,13 +45,10 @@ function parseMe(raw: unknown): MeState | null {
         ? nested.name
         : ''
   const userId =
-    typeof nested.userId === 'string'
-      ? nested.userId
-      : typeof nested.userid === 'string'
-        ? nested.userid
-        : typeof nested.loginId === 'string'
-          ? nested.loginId
-          : undefined
+    toStringValue(nested.userId) ||
+    toStringValue(nested.userid) ||
+    toStringValue(nested.loginId) ||
+    undefined
   const department =
     typeof nested.department === 'string' ? nested.department : ''
   const role = typeof nested.role === 'string' ? nested.role : undefined
@@ -69,6 +68,53 @@ function parseCount(value: unknown): number | null {
   const nested = asRecord(data.data) ?? data
   const count = nested?.count ?? nested?.total ?? nested?.value
   return parseCount(count)
+}
+
+function toNumberValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function toStringValue(value: unknown): string {
+  return typeof value === 'number' || typeof value === 'string'
+    ? String(value)
+    : ''
+}
+
+function parseEvidenceRow(item: unknown): EvidenceRow | null {
+  const o = asRecord(item) ?? {}
+  const id = toNumberValue(o.id ?? o.evidenceId ?? o.evidence_id)
+  if (id === null) return null
+  return {
+    id,
+    caseId: toNumberValue(o.caseId ?? o.case_id),
+    fileName: toStringValue(o.fileName ?? o.file_name),
+    itemType: toStringValue(o.itemType ?? o.item_type),
+    itemName: toStringValue(o.itemName ?? o.item_name ?? o.evidenceName ?? o.evidence_name),
+    holderUserId:
+      toStringValue(o.holderUserId ?? o.holder_user_id ?? o.userId ?? o.user_id) || null,
+    holderUsername: toStringValue(o.holderUsername ?? o.holder_username ?? o.username),
+  }
+}
+
+function parseEvidenceList(raw: unknown): EvidenceRow[] {
+  const data = asRecord(raw)
+  const inner = Array.isArray(raw)
+    ? raw
+    : data && Array.isArray(data.data)
+      ? data.data
+      : data && Array.isArray(data.content)
+        ? data.content
+        : data && Array.isArray(data.items)
+          ? data.items
+          : []
+  return inner
+    .map(parseEvidenceRow)
+    .filter((row): row is EvidenceRow => row !== null)
 }
 
 function caseStatusLabel(status: string | undefined): string {
@@ -124,6 +170,7 @@ export default function MyPage() {
   const [cases, setCases] = useState<CaseRow[]>([])
   const [casesLoading, setCasesLoading] = useState(true)
   const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
+  const [allEvidenceRows, setAllEvidenceRows] = useState<EvidenceRow[]>([])
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[]>([])
   const [evidenceLoading, setEvidenceLoading] = useState(false)
 
@@ -148,27 +195,58 @@ export default function MyPage() {
   }, [])
 
   useEffect(() => {
+    if (loading) return
+    if (!me?.userId) {
+      setCaseCount(0)
+      setEvidenceCount(0)
+      setCases([])
+      setAllEvidenceRows([])
+      setSelectedCaseId(null)
+      setCasesLoading(false)
+      return
+    }
     let ignore = false
     ;(async () => {
       try {
-        const [cRes, eRes, hRes, listRes] = await Promise.all([
-          apiFetch('/cases/count'),
-          apiFetch('/evidence/count'),
+        const [hRes, listRes, evidenceRes] = await Promise.all([
           apiFetch('/handover/in-progress/count'),
           apiFetch('/cases'),
+          apiFetch('/evidence/recent'),
         ])
         if (ignore) return
-        if (cRes.ok) setCaseCount(parseCount(await cRes.json()))
-        if (eRes.ok) setEvidenceCount(parseCount(await eRes.json()))
         if (hRes.ok) setHandoverPending(parseCount(await hRes.json()))
-        if (listRes.ok) {
+        if (listRes.ok && evidenceRes.ok) {
           const list = (await listRes.json()) as unknown
           const rows = Array.isArray(list) ? (list as CaseRow[]) : []
-          setCases(rows)
-          setSelectedCaseId((prev) => (prev === null && rows.length > 0 ? rows[0].id : prev))
+          const allEvidence = parseEvidenceList((await evidenceRes.json()) as unknown)
+          const heldEvidence = allEvidence.filter((row) => row.holderUserId === me.userId)
+          const heldCaseIds = new Set(
+            heldEvidence
+              .map((row) => row.caseId)
+              .filter((caseId): caseId is number => typeof caseId === 'number'),
+          )
+          const visibleCases = rows.filter((row) => heldCaseIds.has(row.id))
+          const visibleEvidence = allEvidence.filter(
+            (row) => typeof row.caseId === 'number' && heldCaseIds.has(row.caseId),
+          )
+          setCases(visibleCases)
+          setAllEvidenceRows(visibleEvidence)
+          setCaseCount(visibleCases.length)
+          setEvidenceCount(visibleEvidence.length)
+          setSelectedCaseId((prev) =>
+            prev !== null && heldCaseIds.has(prev)
+              ? prev
+              : (visibleCases[0]?.id ?? null),
+          )
         }
       } catch {
-        /* ignore */
+        if (!ignore) {
+          setCases([])
+          setAllEvidenceRows([])
+          setCaseCount(0)
+          setEvidenceCount(0)
+          setSelectedCaseId(null)
+        }
       } finally {
         if (!ignore) setCasesLoading(false)
       }
@@ -176,7 +254,7 @@ export default function MyPage() {
     return () => {
       ignore = true
     }
-  }, [])
+  }, [loading, me?.userId])
 
   useEffect(() => {
     if (selectedCaseId === null) {
@@ -185,39 +263,15 @@ export default function MyPage() {
     }
     let ignore = false
     setEvidenceLoading(true)
-    apiFetch(`/evidence/by-case/${selectedCaseId}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-        return res.json() as Promise<unknown>
-      })
-      .then((data) => {
-        if (ignore) return
-        if (!Array.isArray(data)) {
-          setEvidenceRows([])
-          return
-        }
-        const rows: EvidenceRow[] = data.map((item) => {
-          const o = asRecord(item) ?? {}
-          return {
-            id: Number(o.id),
-            fileName: typeof o.fileName === 'string' ? o.fileName : '',
-            itemType: typeof o.itemType === 'string' ? o.itemType : '',
-            holderUserId: typeof o.holderUserId === 'string' ? o.holderUserId : null,
-            holderUsername: typeof o.holderUsername === 'string' ? o.holderUsername : '',
-          }
-        })
-        setEvidenceRows(rows.filter((r) => Number.isFinite(r.id)))
-      })
-      .catch(() => {
-        if (!ignore) setEvidenceRows([])
-      })
-      .finally(() => {
-        if (!ignore) setEvidenceLoading(false)
-      })
+    window.setTimeout(() => {
+      if (ignore) return
+      setEvidenceRows(allEvidenceRows.filter((row) => row.caseId === selectedCaseId))
+      setEvidenceLoading(false)
+    }, 0)
     return () => {
       ignore = true
     }
-  }, [selectedCaseId])
+  }, [allEvidenceRows, selectedCaseId])
 
   const caseCountLabel = caseCount === null ? '—' : caseCount.toLocaleString('ko-KR')
   const evidenceCountLabel = evidenceCount === null ? '—' : evidenceCount.toLocaleString('ko-KR')
@@ -303,7 +357,7 @@ export default function MyPage() {
                   {casesLoading ? (
                     <p className="p-6 text-[15px] text-[#666]">불러오는 중…</p>
                   ) : cases.length === 0 ? (
-                    <p className="p-6 text-[15px] text-[#666]">등록된 사건이 없습니다.</p>
+                    <p className="p-6 text-[15px] text-[#666]">담당하고 있는 사건이 없습니다.</p>
                   ) : (
                     <ul className="max-h-[360px] divide-y divide-[#eee] overflow-auto">
                       {cases.map((c) => (
@@ -359,7 +413,7 @@ export default function MyPage() {
                         >
                           <div className="px-4 py-3 text-left">
                             <p className="text-[12px] font-semibold text-[#174DC0] md:hidden">#{r.id}</p>
-                            <p className="text-[15px] font-medium text-black">{r.fileName || r.itemType || '—'}</p>
+                            <p className="text-[15px] font-medium text-black">{r.itemName || r.fileName || r.itemType || '—'}</p>
                           </div>
                           <div className="px-4 py-1 text-[14px] text-[#555] md:px-2 md:py-3">
                             <span className="md:hidden font-medium text-[#888]">유형 </span>

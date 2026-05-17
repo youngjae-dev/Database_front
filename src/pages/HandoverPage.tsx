@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import HandoverQrScanner from '../components/HandoverQrScanner'
 import { figma, figmaCls } from '../design/tokens'
@@ -16,7 +16,10 @@ type QrLookup = {
   holderUsername: string
 }
 
-type Candidate = { userId: string; username: string }
+type MeState = {
+  userId: string
+  username: string
+}
 
 type CustodyLogRow = {
   id?: number
@@ -32,6 +35,27 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : null
 }
 
+function toText(value: unknown): string {
+  return typeof value === 'number' || typeof value === 'string'
+    ? String(value)
+    : ''
+}
+
+function parseMe(raw: unknown): MeState | null {
+  const data = asRecord(raw)
+  const nested = asRecord(data?.data) ?? data
+  if (!nested) return null
+  const userId =
+    toText(nested.userId) ||
+    toText(nested.userid) ||
+    toText(nested.loginId)
+  const username =
+    toText(nested.username) ||
+    toText(nested.name)
+  if (!userId && !username) return null
+  return { userId, username: username || '—' }
+}
+
 function parseQrLookup(raw: unknown): QrLookup | null {
   const o = asRecord(raw)
   if (!o) return null
@@ -41,12 +65,12 @@ function parseQrLookup(raw: unknown): QrLookup | null {
   return {
     evidenceId,
     caseId,
-    caseName: typeof o.caseName === 'string' ? o.caseName : '',
-    itemType: typeof o.itemType === 'string' ? o.itemType : '',
-    fileName: typeof o.fileName === 'string' ? o.fileName : '',
-    initialHash: typeof o.initialHash === 'string' ? o.initialHash : '',
-    holderUserId: typeof o.holderUserId === 'string' ? o.holderUserId : '',
-    holderUsername: typeof o.holderUsername === 'string' ? o.holderUsername : '',
+    caseName: toText(o.caseName),
+    itemType: toText(o.itemType),
+    fileName: toText(o.fileName),
+    initialHash: toText(o.initialHash),
+    holderUserId: toText(o.holderUserId),
+    holderUsername: toText(o.holderUsername),
   }
 }
 
@@ -69,14 +93,15 @@ function actionColor(action: string | undefined): string {
 }
 
 export default function HandoverPage() {
+  const navigate = useNavigate()
   const [scanOpen, setScanOpen] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [lookup, setLookup] = useState<QrLookup | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupErr, setLookupErr] = useState<string | null>(null)
 
-  const [candidates, setCandidates] = useState<Candidate[]>([])
-  const [toUserId, setToUserId] = useState('')
+  const [me, setMe] = useState<MeState | null>(null)
+  const [meLoading, setMeLoading] = useState(true)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState<string | null>(null)
@@ -84,31 +109,24 @@ export default function HandoverPage() {
   const [history, setHistory] = useState<CustodyLogRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  const loadCandidates = useCallback(async () => {
-    try {
-      const res = await apiFetch('/auth/handover-candidates')
-      if (!res.ok) return
-      const data = (await res.json()) as unknown
-      if (!Array.isArray(data)) return
-      const rows: Candidate[] = data
-        .map((x) => {
-          const r = asRecord(x)
-          if (!r) return null
-          const userId = typeof r.userId === 'string' ? r.userId : ''
-          const username = typeof r.username === 'string' ? r.username : ''
-          if (!userId) return null
-          return { userId, username }
-        })
-        .filter((x): x is Candidate => x !== null)
-      setCandidates(rows)
-    } catch {
-      setCandidates([])
+  useEffect(() => {
+    let ignore = false
+    ;(async () => {
+      try {
+        const res = await apiFetch('/auth/me')
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const parsed = parseMe((await res.json()) as unknown)
+        if (!ignore) setMe(parsed)
+      } catch {
+        if (!ignore) setMe(null)
+      } finally {
+        if (!ignore) setMeLoading(false)
+      }
+    })()
+    return () => {
+      ignore = true
     }
   }, [])
-
-  useEffect(() => {
-    void loadCandidates()
-  }, [loadCandidates])
 
   const performLookup = useCallback(async (hash: string) => {
     setLookupErr(null)
@@ -122,7 +140,6 @@ export default function HandoverPage() {
       const parsed = parseQrLookup(raw)
       if (!parsed) throw new Error('응답 형식이 올바르지 않습니다.')
       setLookup(parsed)
-      setToUserId('')
     } catch (e) {
       setLookup(null)
       setLookupErr(e instanceof Error ? e.message : '조회에 실패했습니다.')
@@ -170,8 +187,17 @@ export default function HandoverPage() {
   const submitTransfer = async () => {
     if (!lookup) return
     setSubmitMsg(null)
-    if (!toUserId) {
-      setSubmitMsg('새 담당자를 선택하세요.')
+    if (!me?.userId) {
+      setSubmitMsg('현재 로그인 사용자 정보를 확인할 수 없습니다.')
+      return
+    }
+    const sameHolder =
+      lookup.holderUserId === me.userId ||
+      (!!lookup.holderUsername && lookup.holderUsername === me.username)
+    if (sameHolder) {
+      const msg = '해당 증거물을 이미 소지하고 있습니다.'
+      window.alert(msg)
+      setSubmitMsg(msg)
       return
     }
     setSubmitting(true)
@@ -180,17 +206,23 @@ export default function HandoverPage() {
         method: 'POST',
         body: JSON.stringify({
           evidenceId: lookup.evidenceId,
-          toUserId,
+          toUserId: me.userId,
           scannedHash: lookup.initialHash,
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const data = (await res.json()) as { message?: string }
-      setSubmitMsg(data.message ?? '인수인계가 완료되었습니다.')
-      void performLookup(lookup.initialHash)
-      void loadCandidates()
+      const successMessage = '성공적으로 증거물을 인수했습니다.'
+      window.alert(successMessage)
+      setSubmitMsg(successMessage)
+      navigate(`/EvidenceDetail/${lookup.evidenceId}`)
     } catch (e) {
-      setSubmitMsg(e instanceof Error ? e.message : '인계 요청에 실패했습니다.')
+      const rawMessage = e instanceof Error ? e.message : '인계 요청에 실패했습니다.'
+      const displayMessage =
+        rawMessage.includes('증거물의 소유자가 아닙니다') ||
+        rawMessage.includes('인계 권한이 없습니다')
+          ? '백엔드에서 현재 요청자를 인계자로 검사해 인수 요청이 거부되었습니다.'
+          : rawMessage
+      setSubmitMsg(displayMessage)
     } finally {
       setSubmitting(false)
     }
@@ -275,7 +307,7 @@ export default function HandoverPage() {
                     ['증거물 ID', String(lookup.evidenceId)],
                     ['증거물명', displayItemName],
                     ['현재 담당자', `${lookup.holderUsername} (${lookup.holderUserId})`],
-                    ['인계 사유(참고)', reason.trim() ? `${reason.slice(0, 48)}${reason.length > 48 ? '…' : ''}` : '—'],
+                    ['인수 사유(참고)', reason.trim() ? `${reason.slice(0, 48)}${reason.length > 48 ? '…' : ''}` : '—'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex flex-col border-b border-[#eee] px-5 py-4 last:border-b-0 md:border-b-0">
                       <span className="text-[13px] font-medium text-[#666]">{k}</span>
@@ -296,29 +328,20 @@ export default function HandoverPage() {
                   ⏳
                 </span>
                 <div className="min-w-0 flex-1 text-[15px] leading-relaxed text-[#252525]">
-                  QR 검증이 완료되었습니다. 아래에서 새 담당자를 선택한 뒤 <strong>인계 요청</strong>을 보내세요.
+                  QR 검증이 완료되었습니다. 현재 로그인된 사용자가 인수자로 자동 입력됩니다. 아래에서 <strong>인계 요청</strong>을 보내세요.
                   실제 승인 워크플로가 있을 경우 이전 담당자는 <Link className="font-semibold text-[#081C47] underline" to="/MyPage">마이페이지</Link>에서 처리할 수 있습니다.
                 </div>
               </section>
 
               <section className={`mt-6 ${figmaCls.panel} p-5 md:p-6`} style={{ boxShadow: figma.cardShadow }}>
-                <h2 className="text-[18px] font-semibold text-black">인계 요청</h2>
+                <h2 className="text-[18px] font-semibold text-black">인수 요청</h2>
                 <label className="mt-4 block text-[15px] font-medium text-[#252525]">
-                  새 담당자 (Officer ID)
+                  인수자
                 </label>
-                <select
-                  value={toUserId}
-                  onChange={(e) => setToUserId(e.target.value)}
-                  className={`mt-2 w-full max-w-md ${figmaCls.inputBox}`}
-                >
-                  <option value="">담당자 선택</option>
-                  {candidates.map((c) => (
-                    <option key={c.userId} value={c.userId}>
-                      {c.username} ({c.userId})
-                    </option>
-                  ))}
-                </select>
-                <label className="mt-5 block text-[15px] font-medium text-[#252525]">인계 사유 (선택, 200자)</label>
+                <div className="mt-2 w-full max-w-md rounded-[10px] border-2 border-[#d9d9d9] bg-[#f8fafc] px-4 py-3 text-[16px] text-[#081C47]">
+                  {meLoading ? '로그인 사용자 확인 중…' : me ? `${me.username} (${me.userId || '—'})` : '로그인 사용자 정보 없음'}
+                </div>
+                <label className="mt-5 block text-[15px] font-medium text-[#252525]">인수 사유 (선택, 200자)</label>
                 <textarea
                   value={reason}
                   maxLength={200}
@@ -331,7 +354,7 @@ export default function HandoverPage() {
                 <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    disabled={submitting}
+                    disabled={submitting || meLoading || !me?.userId}
                     onClick={() => void submitTransfer()}
                     className={`inline-flex min-h-[48px] min-w-[160px] items-center justify-center whitespace-nowrap px-6 ${figmaCls.btnPrimary} disabled:opacity-50`}
                   >

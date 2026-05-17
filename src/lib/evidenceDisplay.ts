@@ -13,6 +13,7 @@ export type EvidenceSummary = {
   currentHash?: string
   hashValue?: string
   caseId?: string
+  caseName?: string
 }
 
 type EvidenceNameType = {
@@ -85,6 +86,7 @@ export function parseEvidenceRow(item: unknown): EvidenceSummary {
       toStringValue(o.hash_value),
     hashValue: toStringValue(o.hashValue) || toStringValue(o.hash_value),
     caseId: toStringValue(o.caseId) || toStringValue(o.case_id),
+    caseName: toStringValue(o.caseName) || toStringValue(o.case_name),
   }
 }
 

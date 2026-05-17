@@ -13,6 +13,8 @@ import {
 export default function EvidenceListPage() {
   const [rows, setRows] = useState<EvidenceSummary[]>([])
   const [query, setQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,16 +40,32 @@ export default function EvidenceListPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return rows
     return rows.filter((r) => {
       const display = parseEvidenceNameType(r)
       const hay = [r.evidenceId, r.fileName, display.name, display.type]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      return hay.includes(q)
+      if (q && !hay.includes(q)) return false
+      if (r.createdAt) {
+        const t = new Date(r.createdAt).getTime()
+        if (Number.isNaN(t)) return !(dateFrom || dateTo)
+        if (dateFrom) {
+          const from = new Date(dateFrom)
+          from.setHours(0, 0, 0, 0)
+          if (t < from.getTime()) return false
+        }
+        if (dateTo) {
+          const to = new Date(dateTo)
+          to.setHours(23, 59, 59, 999)
+          if (t > to.getTime()) return false
+        }
+      } else if (dateFrom || dateTo) {
+        return false
+      }
+      return true
     })
-  }, [rows, query])
+  }, [rows, query, dateFrom, dateTo])
 
   return (
     <AppShell active="evidence">
@@ -68,13 +86,30 @@ export default function EvidenceListPage() {
           </Link>
         </div>
 
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative min-w-0 flex-1">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className={`w-full ${figmaCls.inputBox}`}
               placeholder="증거물 번호·파일명·유형으로 검색"
+            />
+          </div>
+          <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center lg:max-w-[320px]">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className={`h-[56px] w-full min-w-0 ${figmaCls.inputBox}`}
+              title="등록일 시작"
+            />
+            <span className="hidden shrink-0 text-[20px] font-semibold text-[#555] sm:inline">~</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className={`h-[56px] w-full min-w-0 ${figmaCls.inputBox}`}
+              title="등록일 종료"
             />
           </div>
         </div>

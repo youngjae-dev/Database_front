@@ -103,7 +103,8 @@ export default function EvidenceRegisterPage() {
       return
     }
     if (!file) {
-      setMessage('등록할 증거물 파일을 선택하세요.')
+      window.alert('증거물 사진을 업로드해주세요.')
+      setMessage('증거물 사진을 업로드해주세요.')
       return
     }
     if (file.size === 0) {
@@ -130,10 +131,27 @@ export default function EvidenceRegisterPage() {
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const data = (await res.json()) as EvidenceRegisterResponse
       setRegisteredEvidence(data)
-      setMessage(data.message ?? '증거물이 등록되었습니다.')
+      const successMessage = data.message ?? '증거물이 등록되었습니다.'
+      window.alert(successMessage)
+      setMessage(successMessage)
       if (data.qrCodeImage) setQrSrc(toQrImageSrc(data.qrCodeImage))
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : '등록에 실패했습니다.')
+      const rawMessage = e instanceof Error ? e.message : '등록에 실패했습니다.'
+      const lowerMessage = rawMessage.toLowerCase()
+      const displayMessage =
+        lowerMessage.includes('duplicate') ||
+        lowerMessage.includes('duplicated') ||
+        lowerMessage.includes('already') ||
+        lowerMessage.includes('exists') ||
+        lowerMessage.includes('hash') ||
+        lowerMessage.includes('same') ||
+        rawMessage.includes('중복') ||
+        rawMessage.includes('이미') ||
+        rawMessage.includes('동일')
+          ? '중복된 사진명은 사용할 수 없습니다.'
+          : rawMessage
+      window.alert(displayMessage)
+      setMessage(displayMessage)
     } finally {
       setSubmitting(false)
     }

@@ -169,7 +169,7 @@ export default function CaseListPage() {
               placeholder="설명 검색"
               className={`h-[56px] min-h-[56px] w-full min-w-0 flex-1 md:h-[70px] md:min-h-[70px] md:max-w-[245px] ${figmaCls.inputBox}`}
             />
-            <div className="flex w-full min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center md:max-w-[280px]">
+            <div className="flex w-full min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center md:max-w-[320px]">
               <input
                 type="date"
                 value={dateFromDraft}
@@ -177,6 +177,7 @@ export default function CaseListPage() {
                 className={`h-[56px] w-full min-w-0 md:h-[70px] ${figmaCls.inputBox}`}
                 title="등록일 시작"
               />
+              <span className="hidden shrink-0 text-[20px] font-semibold text-[#555] sm:inline">~</span>
               <input
                 type="date"
                 value={dateToDraft}
@@ -208,12 +209,11 @@ export default function CaseListPage() {
           </p>
 
           <section className={`${figmaCls.panel} overflow-hidden`} style={{ boxShadow: figma.cardShadow }}>
-            <div className="hidden border-b-2 border-[#d9d9d9] bg-[rgba(167,193,255,0.29)] text-center text-[15px] font-medium text-black lg:grid lg:grid-cols-[100px_1fr_120px_180px_100px_88px]">
+            <div className="hidden border-b-2 border-[#d9d9d9] bg-[rgba(167,193,255,0.29)] text-center text-[15px] font-medium text-black lg:grid lg:grid-cols-[100px_1fr_120px_180px_88px]">
               <div className="border-r border-[#d9d9d9] py-3">번호</div>
               <div className="border-r border-[#d9d9d9] py-3">사건명</div>
               <div className="border-r border-[#d9d9d9] py-3">상태</div>
               <div className="border-r border-[#d9d9d9] py-3">등록일시</div>
-              <div className="border-r border-[#d9d9d9] py-3">유형</div>
               <div className="py-3">관리</div>
             </div>
 
@@ -226,7 +226,7 @@ export default function CaseListPage() {
                 {pageRows.map((r) => (
                   <li
                     key={r.id}
-                    className="border-b border-[#d9d9d9] last:border-b-0 lg:grid lg:grid-cols-[100px_1fr_120px_180px_100px_88px] lg:items-center lg:text-center"
+                    className="border-b border-[#d9d9d9] last:border-b-0 lg:grid lg:grid-cols-[100px_1fr_120px_180px_88px] lg:items-center lg:text-center"
                   >
                     <div className="hidden px-2 py-4 font-semibold text-[#174DC0] lg:block">#{r.id}</div>
                     <div className="px-4 py-4 text-left lg:px-2">
@@ -239,13 +239,12 @@ export default function CaseListPage() {
                     <div className="px-4 py-1 text-[14px] text-[#555] lg:px-2 lg:py-4">
                       {formatDate(r.createdAt)}
                     </div>
-                    <div className="px-4 py-1 text-[14px] text-[#9ca3af] lg:px-2 lg:py-4">—</div>
                     <div className="flex justify-end px-4 pb-4 lg:justify-center lg:px-2 lg:py-4 lg:pb-4">
                       <Link
                         to={`/CaseDetail/${r.id}`}
                         className="inline-flex rounded-[10px] border border-[#174DC0] bg-[rgba(167,193,255,0.29)] px-4 py-2 text-[14px] font-semibold text-[#081c47] hover:bg-[rgba(167,193,255,0.45)]"
                       >
-                        상세
+                        상세 정보
                       </Link>
                     </div>
                   </li>
