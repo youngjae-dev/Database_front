@@ -124,6 +124,7 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
       <video
         ref={videoRef}
         className="max-h-[280px] w-full rounded-[10px] bg-black object-contain"
+        autoPlay
         muted
         playsInline
       />
