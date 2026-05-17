@@ -127,6 +127,11 @@ export default function HandoverQrScanner({ active, onResult, onError }: Props) 
         autoPlay
         muted
         playsInline
+        onLoadedMetadata={(e) => {
+          e.currentTarget.play().catch((err) => {
+            console.error('Camera play error:', err)
+          })
+        }}
       />
       <div className="rounded-[10px] border border-dashed border-[#D9D9D9] bg-[#fafafa] px-4 py-3">
         <p className="text-[14px] font-medium text-[#252525]">QR 이미지로 읽기</p>
