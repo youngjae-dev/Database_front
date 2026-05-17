@@ -1,4 +1,6 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { apiFetch } from './lib/api'
 import CaseDetailPage from './pages/CaseDetailPage'
 import CaseListPage from './pages/CaseListPage'
 import CaseRegisterPage from './pages/CaseRegisterPage'
@@ -11,6 +13,68 @@ import MyPage from './pages/MyPage'
 import LoginPage from './pages/LoginPage'
 import SignUpPage from './pages/SignUpPage'
 
+const TOKEN_KEY = 'token'
+
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const [isChecking, setIsChecking] = useState(true)
+  const [isAllowed, setIsAllowed] = useState(false)
+  const token =
+    typeof localStorage === 'undefined' ? null : localStorage.getItem(TOKEN_KEY)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function verifyToken() {
+      if (!token) {
+        setIsAllowed(false)
+        setIsChecking(false)
+        return
+      }
+
+      try {
+        const res = await apiFetch('/auth/me')
+        if (!ignore) {
+          setIsAllowed(res.ok)
+          if (!res.ok) localStorage.removeItem(TOKEN_KEY)
+        }
+      } catch {
+        if (!ignore) {
+          setIsAllowed(false)
+          localStorage.removeItem(TOKEN_KEY)
+        }
+      } finally {
+        if (!ignore) setIsChecking(false)
+      }
+    }
+
+    void verifyToken()
+    return () => {
+      ignore = true
+    }
+  }, [token])
+
+  if (isChecking) {
+    return <div className="min-h-screen bg-[#f5f7fb]" />
+  }
+
+  if (!isAllowed) {
+    return <Navigate to="/" replace state={{ from: location }} />
+  }
+
+  return children
+}
+
+function ProtectedPage({ children }: { children: ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+        {children}
+      </div>
+    </ProtectedRoute>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -20,73 +84,73 @@ export default function App() {
         <Route
           path="/home"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <HomePage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/CaseList"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <CaseListPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/EvidenceList"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <EvidenceListPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/CaseRegister"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <CaseRegisterPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/EvidenceRegister"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <EvidenceRegisterPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/EvidenceDetail/:evidenceId"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <EvidenceDetailPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/CaseDetail/:caseId"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <CaseDetailPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/Handover"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <HandoverPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route
           path="/MyPage"
           element={
-            <div className="min-h-screen overflow-x-auto bg-[#f5f7fb]">
+            <ProtectedPage>
               <MyPage />
-            </div>
+            </ProtectedPage>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
