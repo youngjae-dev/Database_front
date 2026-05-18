@@ -70,7 +70,11 @@ function actionLabel(action: string | undefined): string {
   if (action === 'TRANSFER_REQUESTED') return '인수 요청'
   if (action === 'TRANSFER_APPROVED') return '요청 승인'
   if (action === 'TRANSFER_REJECTED') return '요청 거절'
-  return action || '—'
+  return action ? '기록' : '—'
+}
+
+function isHashChainAction(action: string | undefined): boolean {
+  return action === 'INITIAL_REGISTRATION' || action === 'TRANSFER'
 }
 
 function compareHash(a: string | undefined, b: string | undefined): boolean {
@@ -201,6 +205,14 @@ export default function EvidenceDetailPage() {
   }, [evidenceId])
 
   const visibleError = !evidenceId ? '잘못된 증거물 ID입니다.' : error
+  const hashChainLogs = useMemo(
+    () => logs.filter((log) => isHashChainAction(log.action)),
+    [logs],
+  )
+  const requestLogs = useMemo(
+    () => logs.filter((log) => !isHashChainAction(log.action)),
+    [logs],
+  )
 
   const checkHashChain = async () => {
     if (!evidenceId) {
@@ -288,7 +300,12 @@ export default function EvidenceDetailPage() {
 
               <section className={`${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="text-[22px] font-semibold text-black">인수인계 이력</h2>
+                  <div>
+                    <h2 className="text-[22px] font-semibold text-black">해시체인 이력</h2>
+                    <p className="mt-1 text-[14px] text-[#555]">
+                      실제 현재 해시가 변경되는 최초 등록과 인수인계 완료 기록만 표시합니다.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     disabled={checkingHashChain}
@@ -307,10 +324,10 @@ export default function EvidenceDetailPage() {
                     <div className="border-r border-[#d9d9d9] py-3">이전 해시</div>
                     <div className="py-3">현재 해시</div>
                   </div>
-                  {logs.length === 0 ? (
-                    <div className="py-8 text-center text-[15px] text-[#888]">표시할 이력이 없습니다.</div>
+                  {hashChainLogs.length === 0 ? (
+                    <div className="py-8 text-center text-[15px] text-[#888]">표시할 해시체인 이력이 없습니다.</div>
                   ) : (
-                    logs.map((log, index) => (
+                    hashChainLogs.map((log, index) => (
                       <div
                         key={log.id || `${log.actionTime}-${index}`}
                         className="grid border-t border-[#d9d9d9] text-[14px] lg:grid-cols-[160px_120px_110px_110px_1fr_1fr] lg:items-center lg:text-center"
@@ -332,6 +349,44 @@ export default function EvidenceDetailPage() {
                         </div>
                         <div className="break-all p-3 text-left text-[13px] text-[#555]">
                           {log.currentHash || '—'}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className={`mt-6 ${figmaCls.panel} p-6`} style={{ boxShadow: figma.cardShadow }}>
+                <h2 className="text-[22px] font-semibold text-black">인수인계 요청 기록</h2>
+                <p className="mt-1 text-[14px] text-[#555]">
+                  요청과 거절은 알림 상태 기록이며, 이 기록만으로는 현재 해시가 변경되지 않습니다.
+                </p>
+                <div className="mt-4 overflow-hidden rounded-[10px] border border-[#d9d9d9]">
+                  <div className="grid grid-cols-1 bg-[#fafafa] text-center text-[15px] font-medium text-[#555] lg:grid-cols-[160px_130px_1fr_1fr]">
+                    <div className="border-r border-[#d9d9d9] py-3">요청일시</div>
+                    <div className="border-r border-[#d9d9d9] py-3">상태</div>
+                    <div className="border-r border-[#d9d9d9] py-3">요청 흐름</div>
+                    <div className="py-3">기준 해시</div>
+                  </div>
+                  {requestLogs.length === 0 ? (
+                    <div className="py-8 text-center text-[15px] text-[#888]">표시할 요청 기록이 없습니다.</div>
+                  ) : (
+                    requestLogs.map((log, index) => (
+                      <div
+                        key={log.id || `request-${log.actionTime}-${index}`}
+                        className="grid border-t border-[#d9d9d9] text-[14px] lg:grid-cols-[160px_130px_1fr_1fr] lg:items-center lg:text-center"
+                      >
+                        <div className="border-[#d9d9d9] p-3 lg:border-r">
+                          {formatEvidenceDate(log.actionTime)}
+                        </div>
+                        <div className="border-[#d9d9d9] p-3 font-medium lg:border-r">
+                          {actionLabel(log.action)}
+                        </div>
+                        <div className="border-[#d9d9d9] p-3 lg:border-r">
+                          {log.fromUsername || '—'} → {log.toUsername || '—'}
+                        </div>
+                        <div className="break-all p-3 text-left text-[13px] text-[#555]">
+                          {log.previousHash || '—'}
                         </div>
                       </div>
                     ))

@@ -114,7 +114,7 @@ function actionTitle(action: string | undefined): string {
   if (action === 'TRANSFER_APPROVED') return '요청 승인'
   if (action === 'TRANSFER_REJECTED') return '요청 거절'
   if (action === 'EVIDENCE_DELETE') return '삭제 처리'
-  return action ?? '기록'
+  return action ? '기록' : '기록'
 }
 
 function actionDesc(action: string | undefined): string {
@@ -135,6 +135,10 @@ function actionColor(action: string | undefined): string {
   if (action === 'TRANSFER_REJECTED') return 'bg-slate-500'
   if (action === 'EVIDENCE_DELETE') return 'bg-red-500'
   return 'bg-[#174DC0]'
+}
+
+function isHashChainAction(action: string | undefined): boolean {
+  return action === 'INITIAL_REGISTRATION' || action === 'TRANSFER'
 }
 
 export default function HandoverPage() {
@@ -292,6 +296,15 @@ export default function HandoverPage() {
     return lookup.holderUserId === me.userId || (!!lookup.holderUsername && lookup.holderUsername === me.username)
   }, [lookup, me])
 
+  const hashChainHistory = useMemo(
+    () => history.filter((row) => isHashChainAction(row.action)),
+    [history],
+  )
+  const requestHistory = useMemo(
+    () => history.filter((row) => !isHashChainAction(row.action)),
+    [history],
+  )
+
   return (
     <AppShell active="handover">
       <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
@@ -438,9 +451,9 @@ export default function HandoverPage() {
               </section>
 
               <section className="mt-10">
-                <h2 className="text-[22px] font-semibold text-black">인수인계 진행 타임라인</h2>
+                <h2 className="text-[22px] font-semibold text-black">해시체인 타임라인</h2>
                 <p className="mt-1 text-[15px] text-[#555]">
-                  QR로 확인한 증거물의 과거 보관 이력, 현재 담당자, 인수 예정 단계를 함께 표시합니다.
+                  해시가 실제로 생성되는 최초 등록과 인수인계 완료 기록만 중심으로 표시합니다.
                 </p>
                 <div className={`mt-5 ${figmaCls.panel} p-5 md:p-6`} style={{ boxShadow: figma.cardShadow }}>
                   {historyLoading ? (
@@ -448,7 +461,7 @@ export default function HandoverPage() {
                   ) : (
                     <div className="relative space-y-0">
                       <div className="absolute bottom-2 left-5 top-2 w-0.5 -translate-x-1/2 bg-[#D9D9D9]" aria-hidden />
-                      {history.length === 0 ? (
+                      {hashChainHistory.length === 0 ? (
                         <div className="relative flex gap-4 pb-8">
                           <div className="relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full bg-[#174DC0] text-white shadow-sm">
                             <span className="text-[12px] font-bold">1</span>
@@ -470,8 +483,8 @@ export default function HandoverPage() {
                           </div>
                         </div>
                       ) : null}
-                      {history.map((row, idx) => {
-                        const last = idx === history.length - 1
+                      {hashChainHistory.map((row, idx) => {
+                        const last = idx === hashChainHistory.length - 1
                         const title = actionTitle(row.action)
                         const desc = actionDesc(row.action)
                         const phase = last ? '현재' : '과거'
@@ -515,7 +528,7 @@ export default function HandoverPage() {
                       })}
                       <div className="relative flex gap-4">
                         <div className={`relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full shadow-sm ${isCurrentHolder ? 'bg-emerald-500 text-white' : 'border-2 border-[#bdbdbd] bg-[#f2f2f2] text-[#777] grayscale'}`}>
-                          <span className="text-[12px] font-bold">{history.length > 0 ? history.length + 1 : 2}</span>
+                          <span className="text-[12px] font-bold">{hashChainHistory.length > 0 ? hashChainHistory.length + 1 : 2}</span>
                         </div>
                         <div className={`min-w-0 flex-1 rounded-[12px] border px-4 py-3 ${isCurrentHolder ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-dashed border-[#bdbdbd] bg-[#f7f7f7] text-[#666] grayscale'}`}>
                           <div className="flex flex-wrap items-center gap-2">
@@ -555,6 +568,50 @@ export default function HandoverPage() {
                     </div>
                   )}
                 </div>
+              </section>
+
+              <section className={`mt-5 ${figmaCls.panel} p-5 md:p-6`} style={{ boxShadow: figma.cardShadow }}>
+                <h2 className="text-[20px] font-semibold text-black">인수인계 요청 기록</h2>
+                <p className="mt-1 text-[15px] text-[#555]">
+                  요청과 거절은 알림 상태이며, 승인되어 실제 인수인계가 완료될 때만 현재 해시가 변경됩니다.
+                </p>
+                {requestHistory.length === 0 ? (
+                  <div className="mt-4 rounded-[12px] border border-dashed border-[#D9D9D9] bg-[#fafafa] px-4 py-8 text-center text-[15px] text-[#888]">
+                    아직 별도 요청 기록이 없습니다.
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-3">
+                    {requestHistory.map((row, idx) => {
+                      const flow =
+                        row.fromUser || row.user
+                          ? `${formatPerson(row.fromUser, '현재 담당자')} → ${formatPerson(row.user, '요청자')}`
+                          : '—'
+                      return (
+                        <article
+                          key={row.id ?? `request-${idx}`}
+                          className="rounded-[12px] border border-[#D9D9D9] bg-[#fafafa] px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[15px] font-semibold text-black">{actionTitle(row.action)}</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                              해시 변경 없음
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[14px] text-[#555]">
+                            <span>
+                              <span className="text-[#888]">요청 흐름 </span>
+                              <span className="font-medium text-black">{flow}</span>
+                            </span>
+                            <span>
+                              <span className="text-[#888]">일시 </span>
+                              <span className="font-medium text-black">{row.actionTime ?? '—'}</span>
+                            </span>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
               </section>
             </>
           ) : null}
