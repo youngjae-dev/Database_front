@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import HandoverQrScanner from '../components/HandoverQrScanner'
 import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
+import { formatDepartmentLabel } from '../lib/departmentLabels'
 
 type QrLookup = {
   evidenceId: number
@@ -14,11 +15,23 @@ type QrLookup = {
   initialHash: string
   holderUserId: string
   holderUsername: string
+  holderRole?: string
+  holderDepartment?: string
 }
 
 type MeState = {
   userId: string
   username: string
+  role?: string
+  department?: string
+}
+
+type PersonInfo = {
+  id?: string
+  userId?: string
+  username?: string
+  role?: string
+  department?: string
 }
 
 type CustodyLogRow = {
@@ -27,8 +40,8 @@ type CustodyLogRow = {
   actionTime?: string
   previousHash?: string
   currentHash?: string
-  user?: { username?: string }
-  fromUser?: { username?: string } | null
+  user?: PersonInfo
+  fromUser?: PersonInfo | null
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -53,7 +66,12 @@ function parseMe(raw: unknown): MeState | null {
     toText(nested.username) ||
     toText(nested.name)
   if (!userId && !username) return null
-  return { userId, username: username || '—' }
+  return {
+    userId,
+    username: username || '—',
+    role: toText(nested.role),
+    department: toText(nested.department),
+  }
 }
 
 function parseQrLookup(raw: unknown): QrLookup | null {
@@ -71,29 +89,55 @@ function parseQrLookup(raw: unknown): QrLookup | null {
     initialHash: toText(o.initialHash),
     holderUserId: toText(o.holderUserId),
     holderUsername: toText(o.holderUsername),
+    holderRole: toText(o.holderRole),
+    holderDepartment: toText(o.holderDepartment),
   }
+}
+
+function formatPerson(info: PersonInfo | null | undefined, fallback = '—'): string {
+  if (!info) return fallback
+  const username = info.username?.trim()
+  const userId = info.userId?.trim() || info.id?.trim()
+  const role = info.role?.trim()
+  const department = info.department?.trim()
+    ? formatDepartmentLabel(info.department)
+    : ''
+  const main = username || userId || fallback
+  const meta = [department, role].filter(Boolean).join(' · ')
+  return meta ? `${main} (${meta})` : main
 }
 
 function actionTitle(action: string | undefined): string {
   if (action === 'INITIAL_REGISTRATION') return '등록 완료'
   if (action === 'TRANSFER') return '인수인계'
+  if (action === 'TRANSFER_REQUESTED') return '인수 요청'
+  if (action === 'TRANSFER_APPROVED') return '요청 승인'
+  if (action === 'TRANSFER_REJECTED') return '요청 거절'
+  if (action === 'EVIDENCE_DELETE') return '삭제 처리'
   return action ?? '기록'
 }
 
 function actionDesc(action: string | undefined): string {
   if (action === 'INITIAL_REGISTRATION') return '증거물이 시스템에 등록되었습니다.'
   if (action === 'TRANSFER') return '담당자 변경이 체인에 기록되었습니다.'
+  if (action === 'TRANSFER_REQUESTED') return '새 담당자가 인수 승인을 요청했습니다.'
+  if (action === 'TRANSFER_APPROVED') return '이전 담당자가 인수인계를 승인했습니다.'
+  if (action === 'TRANSFER_REJECTED') return '이전 담당자가 인수인계를 거절했습니다.'
+  if (action === 'EVIDENCE_DELETE') return '관리자가 증거물을 삭제 상태로 변경했습니다.'
   return '보관 이력이 갱신되었습니다.'
 }
 
 function actionColor(action: string | undefined): string {
   if (action === 'INITIAL_REGISTRATION') return 'bg-emerald-500'
   if (action === 'TRANSFER') return 'bg-orange-500'
+  if (action === 'TRANSFER_REQUESTED') return 'bg-blue-500'
+  if (action === 'TRANSFER_APPROVED') return 'bg-indigo-500'
+  if (action === 'TRANSFER_REJECTED') return 'bg-slate-500'
+  if (action === 'EVIDENCE_DELETE') return 'bg-red-500'
   return 'bg-[#174DC0]'
 }
 
 export default function HandoverPage() {
-  const navigate = useNavigate()
   const [scanOpen, setScanOpen] = useState(false)
   const [scanError, setScanError] = useState<string | null>(null)
   const [lookup, setLookup] = useState<QrLookup | null>(null)
@@ -202,19 +246,19 @@ export default function HandoverPage() {
     }
     setSubmitting(true)
     try {
-      const res = await apiFetch('/evidence/transfer', {
+      const res = await apiFetch('/handover/requests', {
         method: 'POST',
         body: JSON.stringify({
           evidenceId: lookup.evidenceId,
-          toUserId: me.userId,
           scannedHash: lookup.initialHash,
+          reason: reason.trim(),
         }),
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      const successMessage = '성공적으로 증거물을 인수했습니다.'
+      const successMessage = '이전 담당자에게 인수인계 승인 요청을 보냈습니다.'
       window.alert(successMessage)
       setSubmitMsg(successMessage)
-      navigate(`/EvidenceDetail/${lookup.evidenceId}`)
+      void performLookup(lookup.initialHash)
     } catch (e) {
       const rawMessage = e instanceof Error ? e.message : '인계 요청에 실패했습니다.'
       const displayMessage =
@@ -232,6 +276,21 @@ export default function HandoverPage() {
     if (!lookup) return '—'
     return lookup.fileName?.trim() || lookup.itemType || '—'
   }, [lookup])
+
+  const holderInfo = useMemo<PersonInfo | null>(() => {
+    if (!lookup) return null
+    return {
+      userId: lookup.holderUserId,
+      username: lookup.holderUsername,
+      role: lookup.holderRole,
+      department: lookup.holderDepartment,
+    }
+  }, [lookup])
+
+  const isCurrentHolder = useMemo(() => {
+    if (!lookup || !me) return false
+    return lookup.holderUserId === me.userId || (!!lookup.holderUsername && lookup.holderUsername === me.username)
+  }, [lookup, me])
 
   return (
     <AppShell active="handover">
@@ -306,7 +365,7 @@ export default function HandoverPage() {
                     ['사건 ID', String(lookup.caseId)],
                     ['증거물 ID', String(lookup.evidenceId)],
                     ['증거물명', displayItemName],
-                    ['현재 담당자', `${lookup.holderUsername} (${lookup.holderUserId})`],
+                    ['현재 담당자', `${formatPerson(holderInfo)} / ID ${lookup.holderUserId || '—'}`],
                     ['인수 사유(참고)', reason.trim() ? `${reason.slice(0, 48)}${reason.length > 48 ? '…' : ''}` : '—'],
                   ].map(([k, v]) => (
                     <div key={k} className="flex flex-col border-b border-[#eee] px-5 py-4 last:border-b-0 md:border-b-0">
@@ -328,8 +387,7 @@ export default function HandoverPage() {
                   ⏳
                 </span>
                 <div className="min-w-0 flex-1 text-[15px] leading-relaxed text-[#252525]">
-                  QR 검증이 완료되었습니다. 현재 로그인된 사용자가 인수자로 자동 입력됩니다. 아래에서 <strong>인계 요청</strong>을 보내세요.
-                  실제 승인 워크플로가 있을 경우 이전 담당자는 <Link className="font-semibold text-[#081C47] underline" to="/MyPage">마이페이지</Link>에서 처리할 수 있습니다.
+                  QR 검증이 완료되었습니다. 현재 로그인된 사용자가 인수자로 자동 입력됩니다. 아래에서 <strong>인계 요청</strong>을 보내면 이전 담당자의 마이페이지에 승인 요청이 표시됩니다.
                 </div>
               </section>
 
@@ -339,7 +397,7 @@ export default function HandoverPage() {
                   인수자
                 </label>
                 <div className="mt-2 w-full max-w-md rounded-[10px] border-2 border-[#d9d9d9] bg-[#f8fafc] px-4 py-3 text-[16px] text-[#081C47]">
-                  {meLoading ? '로그인 사용자 확인 중…' : me ? `${me.username} (${me.userId || '—'})` : '로그인 사용자 정보 없음'}
+                  {meLoading ? '로그인 사용자 확인 중…' : me ? `${formatPerson(me)} / ID ${me.userId || '—'}` : '로그인 사용자 정보 없음'}
                 </div>
                 <label className="mt-5 block text-[15px] font-medium text-[#252525]">인수 사유 (선택, 200자)</label>
                 <textarea
@@ -380,39 +438,63 @@ export default function HandoverPage() {
               </section>
 
               <section className="mt-10">
-                <h2 className="text-[22px] font-semibold text-black">보관 이력 타임라인</h2>
+                <h2 className="text-[22px] font-semibold text-black">인수인계 진행 타임라인</h2>
                 <p className="mt-1 text-[15px] text-[#555]">
-                  증거물의 등록·인수인계 체인 기록입니다.
+                  QR로 확인한 증거물의 과거 보관 이력, 현재 담당자, 인수 예정 단계를 함께 표시합니다.
                 </p>
                 <div className={`mt-5 ${figmaCls.panel} p-5 md:p-6`} style={{ boxShadow: figma.cardShadow }}>
                   {historyLoading ? (
                     <p className="text-[15px] text-[#666]">이력을 불러오는 중…</p>
-                  ) : history.length === 0 ? (
-                    <p className="text-[15px] text-[#666]">표시할 이력이 없습니다.</p>
                   ) : (
-                    <div className="relative space-y-0 pl-2">
-                      <div className="absolute bottom-2 left-[19px] top-2 w-0.5 bg-[#D9D9D9]" aria-hidden />
+                    <div className="relative space-y-0">
+                      <div className="absolute bottom-2 left-5 top-2 w-0.5 -translate-x-1/2 bg-[#D9D9D9]" aria-hidden />
+                      {history.length === 0 ? (
+                        <div className="relative flex gap-4 pb-8">
+                          <div className="relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full bg-[#174DC0] text-white shadow-sm">
+                            <span className="text-[12px] font-bold">1</span>
+                          </div>
+                          <div className="min-w-0 flex-1 rounded-[12px] border border-[#A7C1FF] bg-[rgba(167,193,255,0.16)] px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-[16px] font-semibold text-black">현재 보관 상태</span>
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-900">
+                                현재
+                              </span>
+                            </div>
+                            <p className="mt-1 text-[14px] text-[#555]">QR로 확인된 현재 담당자 정보입니다.</p>
+                            <div className="mt-3 text-[14px]">
+                              <span className="text-[#888]">현재 담당자 </span>
+                              <span className="font-medium text-black">
+                                {formatPerson(holderInfo)} / ID {lookup.holderUserId || '—'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                       {history.map((row, idx) => {
                         const last = idx === history.length - 1
                         const title = actionTitle(row.action)
                         const desc = actionDesc(row.action)
+                        const phase = last ? '현재' : '과거'
                         const who =
-                          row.action === 'TRANSFER' && row.fromUser?.username
-                            ? `${row.fromUser.username} → ${row.user?.username ?? '—'}`
-                            : (row.user?.username ?? '—')
+                          row.action === 'TRANSFER' && row.fromUser
+                            ? `${formatPerson(row.fromUser)} → ${formatPerson(row.user)}`
+                            : formatPerson(row.user)
                         return (
-                          <div key={row.id ?? idx} className="relative flex gap-4 pb-8 last:pb-0">
+                          <div key={row.id ?? idx} className="relative flex gap-4 pb-8">
                             <div
-                              className={`relative z-[1] mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm ${actionColor(row.action)}`}
+                              className={`relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm ${last ? 'bg-[#174DC0]' : actionColor(row.action)}`}
                             >
                               <span className="text-[12px] font-bold">{idx + 1}</span>
                             </div>
-                            <div className="min-w-0 flex-1 rounded-[12px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+                            <div className={`min-w-0 flex-1 rounded-[12px] border px-4 py-3 ${last ? 'border-[#A7C1FF] bg-[rgba(167,193,255,0.16)]' : 'border-[#ececec] bg-[#fafafa]'}`}>
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-[16px] font-semibold text-black">{title}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${last ? 'bg-blue-100 text-blue-900' : 'bg-slate-100 text-slate-700'}`}>
+                                  {phase}
+                                </span>
                                 {last ? (
                                   <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                                    최근 기록
+                                    현재 담당 기준
                                   </span>
                                 ) : null}
                               </div>
@@ -431,6 +513,45 @@ export default function HandoverPage() {
                           </div>
                         )
                       })}
+                      <div className="relative flex gap-4">
+                        <div className={`relative z-[1] flex size-10 shrink-0 items-center justify-center rounded-full shadow-sm ${isCurrentHolder ? 'bg-emerald-500 text-white' : 'border-2 border-[#bdbdbd] bg-[#f2f2f2] text-[#777] grayscale'}`}>
+                          <span className="text-[12px] font-bold">{history.length > 0 ? history.length + 1 : 2}</span>
+                        </div>
+                        <div className={`min-w-0 flex-1 rounded-[12px] border px-4 py-3 ${isCurrentHolder ? 'border-emerald-200 bg-emerald-50 text-emerald-950' : 'border-dashed border-[#bdbdbd] bg-[#f7f7f7] text-[#666] grayscale'}`}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`text-[16px] font-semibold ${isCurrentHolder ? 'text-emerald-950' : 'text-[#555]'}`}>
+                              {isCurrentHolder ? '인수 완료' : '인수 예정'}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${isCurrentHolder ? 'bg-emerald-100 text-emerald-900' : 'bg-[#e5e5e5] text-[#666]'}`}>
+                              {isCurrentHolder ? '현재' : '미래'}
+                            </span>
+                            {!isCurrentHolder ? (
+                              <span className="rounded-full bg-[#eeeeee] px-2 py-0.5 text-[11px] font-semibold text-[#777]">
+                                미진행
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-[14px] text-[#666]">
+                            {isCurrentHolder
+                              ? '승인 완료 후 현재 로그인 사용자가 이 증거물의 담당자로 기록되어 있습니다.'
+                              : '인계 요청을 누르면 이전 담당자의 마이페이지에 승인 알림이 생성됩니다.'}
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-[14px]">
+                            <span>
+                              <span className="text-[#888]">{isCurrentHolder ? '현재 담당' : '예정 흐름'} </span>
+                              <span className="font-medium text-[#555]">
+                                {isCurrentHolder
+                                  ? `${formatPerson(holderInfo, '현재 담당자')} / ID ${lookup.holderUserId || '—'}`
+                                  : `${formatPerson(holderInfo, '현재 담당자')} → ${formatPerson(me, '로그인 사용자')}`}
+                              </span>
+                            </span>
+                            <span>
+                              <span className="text-[#888]">상태 </span>
+                              <span className="font-medium text-[#555]">{isCurrentHolder ? '인수 완료' : '요청 전'}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

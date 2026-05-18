@@ -6,8 +6,8 @@ import { apiFetch, readApiErrorMessage } from '../lib/api'
 import {
   asRecord,
   formatEvidenceDate,
-  parseEvidenceList,
   parseEvidenceNameType,
+  parseEvidenceRow,
   type EvidenceSummary,
 } from '../lib/evidenceDisplay'
 
@@ -67,6 +67,9 @@ function parseCustodyLogs(raw: unknown): CustodyLogRow[] {
 function actionLabel(action: string | undefined): string {
   if (action === 'INITIAL_REGISTRATION') return '최초 등록'
   if (action === 'TRANSFER') return '인수인계'
+  if (action === 'TRANSFER_REQUESTED') return '인수 요청'
+  if (action === 'TRANSFER_APPROVED') return '요청 승인'
+  if (action === 'TRANSFER_REJECTED') return '요청 거절'
   return action || '—'
 }
 
@@ -81,11 +84,14 @@ function formatLogPoint(log: CustodyLogRow, index: number): string {
 }
 
 function buildHashChainResult(logs: CustodyLogRow[]): string {
-  if (logs.length === 0) {
+  const chainLogs = logs.filter(
+    (log) => log.action === 'INITIAL_REGISTRATION' || log.action === 'TRANSFER',
+  )
+  if (chainLogs.length === 0) {
     return '해시체인 확인 결과\n\n검사할 인수인계 이력이 없습니다.'
   }
 
-  const orderedLogs = logs
+  const orderedLogs = chainLogs
     .map((log, index) => ({ log, index }))
     .sort((a, b) => {
       const aTime = Date.parse(a.log.actionTime ?? '')
@@ -166,24 +172,20 @@ export default function EvidenceDetailPage() {
       setLoading(true)
       setError(null)
       try {
-        const [listRes, historyRes] = await Promise.all([
-          apiFetch('/evidence/recent'),
+        const [detailRes, historyRes] = await Promise.all([
+          apiFetch(`/evidence/${evidenceId}`),
           apiFetch(`/evidence/${evidenceId}/history`),
         ])
 
-        if (!listRes.ok) throw new Error(await readApiErrorMessage(listRes))
+        if (!detailRes.ok) throw new Error(await readApiErrorMessage(detailRes))
         if (!historyRes.ok) throw new Error(await readApiErrorMessage(historyRes))
 
-        const list = parseEvidenceList((await listRes.json()) as unknown)
-        const found =
-          list.find((item) => item.evidenceId === evidenceId || item.id === evidenceId) ??
-          null
+        const found = parseEvidenceRow((await detailRes.json()) as unknown)
         const history = parseCustodyLogs((await historyRes.json()) as unknown)
 
         if (!ignore) {
           setRow(found)
           setLogs(history)
-          if (!found) setError('해당 증거물 정보를 목록에서 찾을 수 없습니다.')
         }
       } catch (e) {
         if (!ignore)
