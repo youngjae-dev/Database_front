@@ -222,11 +222,36 @@ export default function EvidenceDetailPage() {
 
     setCheckingHashChain(true)
     try {
+      // 1. 실제 파일의 물리적 무결성 검증 (서버에서 파일 해싱 수행)
+      const verifyRes = await apiFetch(`/evidence/${evidenceId}/verify`, { method: 'POST' })
+      let fileStatus = '확인 불가'
+      let fileIntact = false
+      
+      if (verifyRes.ok) {
+        const verifyData = asRecord(await verifyRes.json())
+        fileIntact = !!verifyData?.verified
+        fileStatus = fileIntact ? '정상 (변조 없음)' : '⚠️ 변조 또는 유실 감지!'
+      }
+
+      // 2. DB 로그의 논리적 해시체인 검증
       const res = await apiFetch(`/evidence/${evidenceId}/history`)
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const latestLogs = parseCustodyLogs((await res.json()) as unknown)
       setLogs(latestLogs)
-      window.alert(buildHashChainResult(latestLogs))
+      
+      const chainReport = buildHashChainResult(latestLogs)
+      
+      // 3. 종합 결과 알림
+      const finalReport = [
+        '🔍 무결성 정밀 검증 결과',
+        '--------------------------------',
+        `[1] 실물 파일 상태: ${fileStatus}`,
+        `[2] 장부(DB) 상태: ${chainReport.split('\n').slice(2).join('\n')}`, // 보고서 제목 제외하고 합침
+        '--------------------------------',
+        fileIntact ? '✅ 최종 결론: 이 증거물은 안전합니다.' : '❌ 최종 결론: 보안 위협이 감지되었습니다!'
+      ].join('\n')
+      
+      window.alert(finalReport)
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '해시체인 확인에 실패했습니다.')
     } finally {
