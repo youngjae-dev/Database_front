@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import { figma, figmaCls } from '../design/tokens'
 import { apiFetch, readApiErrorMessage } from '../lib/api'
@@ -31,9 +31,11 @@ function formatDate(value: string | undefined): string {
 
 export default function CaseDetailPage() {
   const { caseId } = useParams<{ caseId: string }>()
+  const navigate = useNavigate()
   const [row, setRow] = useState<CaseRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [closing, setClosing] = useState(false)
 
   const idNum = useMemo(() => Number(caseId), [caseId])
 
@@ -70,6 +72,33 @@ export default function CaseDetailPage() {
     }
   }, [caseId, idNum])
 
+  async function closeCase() {
+    if (!caseId || !Number.isFinite(idNum) || closing) return
+
+    setClosing(true)
+    try {
+      const res = await apiFetch(`/cases/${idNum}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        const message =
+          res.status === 403
+            ? '관리자만 사건을 종결할 수 있습니다'
+            : await readApiErrorMessage(res)
+        window.alert(message)
+        return
+      }
+
+      window.alert('사건이 종결되었습니다.')
+      navigate('/CaseList', { replace: true })
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : '사건 종결에 실패했습니다.')
+    } finally {
+      setClosing(false)
+    }
+  }
+
   return (
     <AppShell active="cases">
       <div className="min-h-full px-4 py-8 pb-14 md:px-8" style={{ backgroundColor: figma.pageBg }}>
@@ -89,8 +118,22 @@ export default function CaseDetailPage() {
         </nav>
 
         <header className="mb-8">
-          <h1 className={figmaCls.titlePage}>사건 정보</h1>
-          <p className={`mt-2 ${figmaCls.subtitle}`}>선택한 사건의 기본 정보와 개요를 확인합니다.</p>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className={figmaCls.titlePage}>사건 정보</h1>
+              <p className={`mt-2 ${figmaCls.subtitle}`}>선택한 사건의 기본 정보와 개요를 확인합니다.</p>
+            </div>
+            {row ? (
+              <button
+                type="button"
+                disabled={closing}
+                onClick={() => void closeCase()}
+                className="inline-flex min-h-[48px] w-full shrink-0 items-center justify-center whitespace-nowrap rounded-[10px] bg-[#b42318] px-5 py-3 text-[16px] font-semibold leading-none text-white transition hover:bg-[#8f1d14] disabled:opacity-60 md:w-auto"
+              >
+                {closing ? '종결 중…' : '사건 종결'}
+              </button>
+            ) : null}
+          </div>
         </header>
 
         {loading ? (
