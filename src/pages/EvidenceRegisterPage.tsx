@@ -185,23 +185,10 @@ export default function EvidenceRegisterPage() {
       if (data.qrCodeImage) setQrSrc(toQrImageSrc(data.qrCodeImage))
     } catch (e) {
       const rawMessage = e instanceof Error ? e.message : '등록에 실패했습니다.'
-      const lowerMessage = rawMessage.toLowerCase()
-      const displayMessage =
-        lowerMessage.includes('duplicate') ||
-        lowerMessage.includes('duplicated') ||
-        lowerMessage.includes('already') ||
-        lowerMessage.includes('exists') ||
-        lowerMessage.includes('hash') ||
-        lowerMessage.includes('same') ||
-        rawMessage.includes('중복') ||
-        rawMessage.includes('이미') ||
-        rawMessage.includes('동일')
-          ? '중복된 사진명은 사용할 수 없습니다.'
-          : rawMessage
-      window.alert(displayMessage)
-      setMessage(displayMessage)
-    } finally {
-      setSubmitting(false)
+      // 가짜 메시지 필터링 제거하고 진짜 메시지 표시
+      window.alert(rawMessage)
+      setMessage(rawMessage)
+    } finally {      setSubmitting(false)
     }
   }
 
