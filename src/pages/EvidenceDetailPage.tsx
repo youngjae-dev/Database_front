@@ -164,7 +164,7 @@ export default function EvidenceDetailPage() {
         setLogs(latestLogs)
       }
       
-      const chainOnlyLogs = latestLogs.filter(isHashChainAction)
+      const chainOnlyLogs = latestLogs.filter((log) => isHashChainAction(log.action))
 
       // 조작된 로그 ID 추출 (백엔드 에러 메시지 분석)
       let failedLogId = -1
