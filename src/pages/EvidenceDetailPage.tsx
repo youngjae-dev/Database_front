@@ -85,6 +85,10 @@ export default function EvidenceDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [checkingHashChain, setCheckingHashChain] = useState(false)
 
+  const [verifyingIndex, setVerifyingIndex] = useState<number>(-1)
+  const [verifiedIndexes, setVerifiedIndexes] = useState<number[]>([])
+  const [failedIndex, setFailedIndex] = useState<number>(-1)
+
   const display = useMemo(
     () => parseEvidenceNameType(row ?? {}),
     [row],
@@ -154,26 +158,67 @@ export default function EvidenceDetailPage() {
 
       // 2. 히스토리 목록 갱신 (화면 표시용)
       const historyRes = await apiFetch(`/evidence/${evidenceId}/history`)
+      let latestLogs = logs
       if (historyRes.ok) {
-        const latestLogs = parseCustodyLogs((await historyRes.json()) as unknown)
+        latestLogs = parseCustodyLogs((await historyRes.json()) as unknown)
         setLogs(latestLogs)
       }
       
-      // 3. 통합 결과 리포트 (백엔드 결과를 100% 신뢰)
-      const finalReport = [
-        '무결성 정밀 검증 결과',
-        '--------------------------------',
-        `상태: ${verificationMessage}`,
-        '--------------------------------',
-        isTotallyIntact 
-          ? '최종 결론: 이 증거물은 안전합니다.' 
-          : '최종 결론: 보안 위협이 감지되었습니다!'
-      ].join('\n')
+      const chainOnlyLogs = latestLogs.filter(isHashChainAction)
+
+      // 조작된 로그 ID 추출 (백엔드 에러 메시지 분석)
+      let failedLogId = -1
+      const logIdMatch = verificationMessage.match(/\[LOG_ID:(\d+)\]/)
+      if (logIdMatch) {
+          failedLogId = parseInt(logIdMatch[1], 10)
+      } else if (!isTotallyIntact) {
+          failedLogId = chainOnlyLogs[chainOnlyLogs.length - 1]?.id ? parseInt(chainOnlyLogs[chainOnlyLogs.length - 1].id!, 10) : -1
+      }
+
+      // --- 애니메이션 시작 ---
+      setVerifiedIndexes([])
+      setFailedIndex(-1)
       
-      window.alert(finalReport)
+      for (let i = 0; i < chainOnlyLogs.length; i++) {
+         setVerifyingIndex(i)
+         
+         // 한 줄 검사할 때마다 0.6초씩 대기 (극적인 효과)
+         await new Promise(r => setTimeout(r, 600))
+         
+         const currentLogId = chainOnlyLogs[i].id ? parseInt(chainOnlyLogs[i].id!, 10) : -1
+         
+         if (!isTotallyIntact && currentLogId === failedLogId) {
+             // 조작 적발! (빨간색)
+             setFailedIndex(i)
+             setVerifyingIndex(-1)
+             break
+         }
+         // 정상 통과 (초록색)
+         setVerifiedIndexes(prev => [...prev, i])
+      }
+
+      if (isTotallyIntact) {
+         setVerifyingIndex(-1)
+      }
+
+      // 애니메이션이 끝난 후 0.3초 뒤에 팝업 띄우기
+      setTimeout(() => {
+        const finalReport = [
+          '무결성 정밀 검증 결과',
+          '--------------------------------',
+          `상태: ${verificationMessage}`,
+          '--------------------------------',
+          isTotallyIntact 
+            ? '최종 결론: 이 증거물은 안전합니다.' 
+            : '최종 결론: 보안 위협이 감지되었습니다!'
+        ].join('\n')
+        
+        window.alert(finalReport)
+        setCheckingHashChain(false)
+      }, 300)
+
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '무결성 검증에 실패했습니다.')
-    } finally {
       setCheckingHashChain(false)
     }
   }
@@ -271,31 +316,43 @@ export default function EvidenceDetailPage() {
                   {hashChainLogs.length === 0 ? (
                     <div className="py-8 text-center text-[15px] text-[#888]">표시할 해시체인 이력이 없습니다.</div>
                   ) : (
-                    hashChainLogs.map((log, index) => (
-                      <div
-                        key={log.id || `${log.actionTime}-${index}`}
-                        className="grid border-t border-[#d9d9d9] text-[14px] lg:grid-cols-[160px_120px_110px_110px_1fr_1fr] lg:items-center lg:text-center"
-                      >
-                        <div className="border-[#d9d9d9] p-3 lg:border-r">
-                          {formatEvidenceDate(log.actionTime)}
+                    hashChainLogs.map((log, index) => {
+                      let rowClass = "grid border-t border-[#d9d9d9] text-[14px] lg:grid-cols-[160px_120px_110px_110px_1fr_1fr] lg:items-center lg:text-center transition-colors duration-300"
+                      
+                      if (failedIndex === index) {
+                        rowClass += " bg-[#fee2e2] text-[#991b1b] font-bold" // 조작 발견
+                      } else if (verifiedIndexes.includes(index)) {
+                        rowClass += " bg-[#dcfce3] text-[#166534]" // 정상 통과
+                      } else if (verifyingIndex === index) {
+                        rowClass += " bg-[#fef08a] animate-pulse" // 현재 검사 중
+                      }
+
+                      return (
+                        <div
+                          key={log.id || `${log.actionTime}-${index}`}
+                          className={rowClass}
+                        >
+                          <div className="border-[#d9d9d9] p-3 lg:border-r">
+                            {formatEvidenceDate(log.actionTime)}
+                          </div>
+                          <div className="border-[#d9d9d9] p-3 lg:border-r">
+                            {actionLabel(log.action)}
+                          </div>
+                          <div className="border-[#d9d9d9] p-3 lg:border-r">
+                            {log.fromUsername || (log.action === 'INITIAL_REGISTRATION' ? '시스템' : '—')}
+                          </div>
+                          <div className="border-[#d9d9d9] p-3 lg:border-r">
+                            {log.toUsername || '—'}
+                          </div>
+                          <div className="break-all border-[#d9d9d9] p-3 text-left text-[13px] text-[#555] lg:border-r">
+                            {log.previousHash || '—'}
+                          </div>
+                          <div className="break-all p-3 text-left text-[13px] text-[#555]">
+                            {log.currentHash || '—'}
+                          </div>
                         </div>
-                        <div className="border-[#d9d9d9] p-3 lg:border-r">
-                          {actionLabel(log.action)}
-                        </div>
-                        <div className="border-[#d9d9d9] p-3 lg:border-r">
-                          {log.fromUsername || (log.action === 'INITIAL_REGISTRATION' ? '시스템' : '—')}
-                        </div>
-                        <div className="border-[#d9d9d9] p-3 lg:border-r">
-                          {log.toUsername || '—'}
-                        </div>
-                        <div className="break-all border-[#d9d9d9] p-3 text-left text-[13px] text-[#555] lg:border-r">
-                          {log.previousHash || '—'}
-                        </div>
-                        <div className="break-all p-3 text-left text-[13px] text-[#555]">
-                          {log.currentHash || '—'}
-                        </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </section>
